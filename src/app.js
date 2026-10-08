@@ -2,6 +2,7 @@ import { createEditor, setEditorDoc, editorYForLine } from './editor.js';
 import { buildDocument, PAGE_SIZE_NAMES } from './document.js';
 import { measurePreviewBlocks, buildAnchors, mapY, referenceY, scrollTopForReference } from './sync.js';
 import { platform } from './platform.js';
+import { planIncremental } from './incremental.js';
 import WELCOME from './welcome.md';
 
 const $ = (sel) => document.querySelector(sel);
@@ -27,7 +28,7 @@ const editorHost = $('#editor');
 const editor = createEditor(editorHost, {
   doc: '',
   onChange: () => { updateTitle(); scheduleRender(); },
-  onGeometry: () => { if (!rendering) onScroll(activePane, true); },
+  onGeometry: () => { if (!job || job.done) onScroll(activePane, true); },
 });
 const editorScroller = editor.scrollDOM;
 
@@ -52,12 +53,13 @@ function updateTitle() {
 }
 
 // ---------- preview (double-buffered iframes) ----------
-// Two iframes: one visible, one rendering in the background. When the
-// background one finishes paginating we swap them, so typing never flickers.
+// Two iframes: one visible, one rendering in the background. As soon as the
+// background one has laid out the pages currently in view, it is swapped to
+// the front; later pages keep appearing below. Pages have a fixed size, so
+// nothing on screen moves while the rest of the document fills in.
 const frames = [$('#frame-a'), $('#frame-b')];
 let front = 0;
-let rendering = false;
-let pending = false;
+let job = null;        // the render in progress: { frame, target, swapped, started, done }
 let renderTimer = null;
 let preview = { blocks: [], scrollHeight: 0, pageWidth: 0 };
 
@@ -70,57 +72,132 @@ function baseHref() {
   return filePath ? platform.dirUrl(filePath) : APP_ROOT;
 }
 
-function renderNow() {
+// Stop a Paged.js run where it is (its pages so far stay on screen).
+function haltPaged(frame) {
+  try {
+    const q = frame.contentWindow.PagedPolyfill.chunker.q;
+    q.tick = () => {};
+    q._q.length = 0;
+  } catch {}
+}
+
+/** Number of pages needed to cover the visible area of the current preview. */
+function pagesInView() {
+  const d = frames[front].contentDocument;
+  const sc = previewScroller(frames[front]);
+  const pages = d ? d.querySelectorAll('.pagedjs_page') : [];
+  if (!sc || !pages.length) return 2;
+  const bottom = sc.scrollTop + sc.clientHeight;
+  const originY = d.documentElement.getBoundingClientRect().top;
+  let n = 0;
+  for (const pg of pages) {
+    if (pg.getBoundingClientRect().top - originY > bottom) break;
+    n++;
+  }
+  return n + 2; // a little slack in case content above grew
+}
+
+// What the front frame's (complete) render was made from, for incremental renders.
+let frontSource = null;
+
+function layoutKey() {
+  return [settings.pageSize, baseHref()].join('|');
+}
+
+function renderNow({ full = false } = {}) {
   clearTimeout(renderTimer);
-  if (rendering) { pending = true; return; }
-  rendering = true;
-  pending = false;
+  // A newer edit supersedes whatever is still rendering.
+  // (Loading a new document into the hidden frame cancels its old render.)
+  if (job && !job.done && job.swapped) { haltPaged(job.frame); frontSource = null; }
+  const frame = frames[1 - front];
+  const text = currentText();
+  const key = layoutKey();
+  const plan = full ? null : planIncremental(frontSource, text, key);
+  job = { frame, text, key, target: pagesInView(), swapped: false, done: false, started: performance.now(), pages: 0,
+    prevHeight: preview.scrollHeight, skip: plan ? plan.skipPages : 0, prefixFrom: plan ? frames[front] : null };
   setStatus('Rendering…');
-  const started = performance.now();
-  const back = frames[1 - front];
-  const html = buildDocument(currentText(), {
+  const thisJob = job;
+  thisJob.watchdog = setTimeout(() => { if (job === thisJob && !thisJob.done) completeJob(thisJob); }, 30000);
+  frame.srcdoc = buildDocument(text, {
     assetBase: APP_ROOT, baseHref: baseHref(), pageSize: settings.pageSize, title: fileName,
+    pagesLeft: centeredLeft(), startLine: plan ? plan.startLine : null,
   });
+}
 
-  const onMessage = (e) => {
-    if (e.source !== back.contentWindow || e.data?.type !== 'paged-done') return;
-    window.removeEventListener('message', onMessage);
-    clearTimeout(watchdog);
-    finish();
-  };
-  // A broken document should never wedge the preview.
-  const watchdog = setTimeout(() => { window.removeEventListener('message', onMessage); finish(); }, 20000);
-  window.addEventListener('message', onMessage);
+// Called from inside the rendering frame: copies of the pages it can reuse.
+window.__mdpdfPrefixPages = (doc) => {
+  const j = job;
+  if (!j || !j.prefixFrom || doc !== j.frame.contentDocument) return null;
+  const pages = [...j.prefixFrom.contentDocument.querySelectorAll('.pagedjs_page')].slice(0, j.skip);
+  if (pages.length !== j.skip) return null;
+  return pages.map((p) => doc.importNode(p, true));
+};
 
-  const finish = () => {
-    // Re-render in progress may have been superseded; still swap what we have.
-    const oldFront = frames[front];
-    const prevScroll = previewScroller(oldFront);
-    const keepPreviewPosition = activePane === 'preview' && prevScroll;
-    const oldTop = prevScroll ? prevScroll.scrollTop : 0;
+window.addEventListener('message', (e) => {
+  const j = job;
+  if (!j || j.done || e.source !== j.frame.contentWindow) return;
+  if (e.data?.type === 'paged-page') {
+    j.pages = e.data.count;
+    // `count` pages exist, so all but the last are fully laid out.
+    if (!j.swapped && j.skip + j.pages - 1 >= j.target) swapIn(j);
+  } else if (e.data?.type === 'paged-done') {
+    completeJob(j);
+  }
+});
 
-    back.style.visibility = 'visible';
-    back.style.zIndex = '1';
-    applyPreviewZoom(back);
-    attachPreviewListeners(back);
-    remeasurePreview(back);
+function swapIn(j) {
+  const back = j.frame;
+  const oldFront = frames[front];
+  const oldSc = previewScroller(oldFront);
+  const oldTop = oldSc ? oldSc.scrollTop : 0;
 
-    const sc = previewScroller(back);
-    if (sc) {
-      if (keepPreviewPosition) sc.scrollTop = oldTop;
-      else syncFrom('editor', back);
-    }
-    oldFront.style.visibility = 'hidden';
-    oldFront.style.zIndex = '0';
-    front = 1 - front;
+  back.style.visibility = 'visible';
+  back.style.zIndex = '1';
+  attachPreviewListeners(back);
+  remeasurePreview(back, j.done ? 0 : j.prevHeight);
+  applyPreviewZoom();
+  const sc = previewScroller(back);
+  if (sc) {
+    if (activePane === 'preview') sc.scrollTop = oldTop;
+    else syncFrom('editor', back);
+  }
+  oldFront.style.visibility = 'hidden';
+  oldFront.style.zIndex = '0';
+  front = frames.indexOf(back);
+  j.swapped = true;
+}
 
-    const pages = back.contentDocument?.querySelectorAll('.pagedjs_page').length || 0;
-    setStatus(`${pages} page${pages === 1 ? '' : 's'} · ${Math.round(performance.now() - started)} ms`);
-    rendering = false;
-    if (pending) renderNow();
-  };
+function completeJob(j) {
+  j.done = true;
+  clearTimeout(j.watchdog);
+  const win = j.frame.contentWindow;
+  const d = j.frame.contentDocument;
+  if (j.skip && win && win.__mdpdfPrefixCount !== j.skip) {
+    // Reuse didn't happen as planned; fall back to a full render.
+    renderNow({ full: true });
+    return;
+  }
+  if (j.skip && d) finishIncremental(d);
+  if (!j.swapped) swapIn(j);
+  frontSource = win && win.__pagedDone ? { text: j.text, key: j.key, doc: d } : null;
+  recenterPages();
+  remeasurePreview(j.frame);
+  if (activePane === 'editor') syncFrom('editor', j.frame);
+  const pages = j.frame.contentDocument?.querySelectorAll('.pagedjs_page').length || 0;
+  setStatus(`${pages} page${pages === 1 ? '' : 's'} · ${Math.round(performance.now() - j.started)} ms`);
+  window.__mdpdfLastRender = { skip: j.skip, ms: performance.now() - j.started }; // for tests
+}
 
-  back.srcdoc = html;
+// Tidy up after reusing pages: number pages in order and give Paged.js's
+// total-pages counter the full count.
+function finishIncremental(d) {
+  const pages = d.querySelectorAll('.pagedjs_page');
+  pages.forEach((p, i) => {
+    p.id = 'page-' + (i + 1);
+    p.dataset.pageNumber = String(i + 1);
+    if (i > 0) p.classList.remove('pagedjs_first_page');
+  });
+  d.querySelector('.pagedjs_pages')?.style.setProperty('--pagedjs-page-count', String(pages.length));
 }
 
 function previewScroller(frame) {
@@ -128,49 +205,69 @@ function previewScroller(frame) {
   return d && (d.scrollingElement || d.documentElement);
 }
 
-function remeasurePreview(frame = frames[front]) {
+// While a render is still filling in, `minHeight` is the previous document's
+// height: a good stand-in for the final height so sync doesn't jump around.
+function remeasurePreview(frame = frames[front], minHeight = 0) {
   const d = frame.contentDocument;
   if (!d) return;
   const m = measurePreviewBlocks(d);
   const page = d.querySelector('.pagedjs_page');
-  preview = { ...m, pageWidth: page ? page.offsetWidth : 0 };
+  preview = { ...m, scrollHeight: Math.max(m.scrollHeight, minHeight), pageWidth: page ? page.offsetWidth : 0 };
 }
 
 // ---------- zoom ----------
-function applyPreviewZoom(frame = frames[front]) {
-  const d = frame.contentDocument;
-  if (!d || !d.documentElement) return;
-  let zoom = settings.previewZoom;
-  if (settings.previewFit) {
-    const page = d.querySelector('.pagedjs_page');
-    if (page) {
-      d.documentElement.style.zoom = '1';
-      const avail = frame.clientWidth - 32;
-      zoom = Math.max(0.1, avail / page.offsetWidth);
-    }
+// The preview iframes are scaled from the outside with a CSS transform, so the
+// document inside always lays out at 100%. (Changing CSS `zoom` instead alters
+// the frame's pixel ratio, and doing that while Paged.js is mid-layout makes it
+// mis-measure and drop content at page breaks.)
+let previewZoomValue = 1;
+
+function applyPreviewZoom() {
+  const host = $('.frames');
+  const W = host.clientWidth, H = host.clientHeight;
+  let z = settings.previewZoom;
+  if (settings.previewFit && preview.pageWidth) z = W / (preview.pageWidth + 48); // room for padding + scrollbar
+  z = Math.min(4, Math.max(0.1, z));
+  previewZoomValue = z;
+  for (const f of frames) {
+    f.style.transform = `scale(${z})`;
+    f.style.width = W / z + 'px';
+    f.style.height = H / z + 'px';
   }
-  d.documentElement.style.zoom = String(zoom);
-  $('#preview-zoom-label').textContent = Math.round(zoom * 100) + '%';
+  $('#preview-zoom-label').textContent = Math.round(z * 100) + '%';
   $('#preview-fit').classList.toggle('active', settings.previewFit);
 }
 
 function setPreviewZoom(z, { fit = false } = {}) {
-  const frame = frames[front];
-  const sc = previewScroller(frame);
-  const ref = sc ? referenceY(sc.scrollTop, sc.clientHeight, sc.scrollHeight) / Math.max(1, sc.scrollHeight) : 0;
+  const sc = previewScroller(frames[front]);
+  const center = sc ? sc.scrollTop + sc.clientHeight / 2 : 0;
   settings.previewFit = fit;
   if (!fit) settings.previewZoom = Math.min(4, Math.max(0.2, z));
   saveSettings();
-  applyPreviewZoom(frame);
-  remeasurePreview(frame);
-  // Keep roughly the same spot in view, then realign with the editor.
-  if (sc) sc.scrollTop = scrollTopForReference(ref * sc.scrollHeight, sc.clientHeight, sc.scrollHeight);
-  if (settings.sync) syncFrom('editor');
+  applyPreviewZoom();
+  recenterPages();
+  // Keep the same spot centred, then realign the panes.
+  if (sc) sc.scrollTop = center - sc.clientHeight / 2;
+  remeasurePreview();
+  syncFrom(activePane === 'preview' ? 'preview' : 'editor');
+}
+
+// Left offset that centres the pages in the preview frame (in the frame's own px).
+function centeredLeft() {
+  const sc = previewScroller(frames[front]);
+  const inner = sc ? sc.clientWidth : $('.frames').clientWidth / previewZoomValue;
+  return preview.pageWidth ? Math.max(24, (inner - preview.pageWidth) / 2) : 24;
+}
+
+// Only touch a frame whose layout is finished; moving pages mid-render breaks Paged.js.
+function recenterPages() {
+  if (job && !job.done && frames[front] === job.frame) return;
+  const d = frames[front].contentDocument;
+  if (d && d.documentElement) d.documentElement.style.setProperty('--pages-left', Math.round(centeredLeft()) + 'px');
 }
 
 function currentPreviewZoom() {
-  const d = frames[front].contentDocument;
-  return d ? parseFloat(d.documentElement.style.zoom) || 1 : settings.previewZoom;
+  return previewZoomValue;
 }
 
 function setEditorFontSize(px) {
@@ -203,12 +300,13 @@ function syncFrom(source, frame = frames[front]) {
   const psc = previewScroller(frame);
   if (!psc) return;
   const a = anchors();
+  const pH = preview.scrollHeight || psc.scrollHeight;
   if (source === 'editor') {
     const y = referenceY(editorScroller.scrollTop, editorScroller.clientHeight, editorScroller.scrollHeight);
     const py = mapY(a, y, 0, 1);
-    psc.scrollTop = scrollTopForReference(py, psc.clientHeight, psc.scrollHeight);
+    psc.scrollTop = scrollTopForReference(py, psc.clientHeight, pH);
   } else {
-    const y = referenceY(psc.scrollTop, psc.clientHeight, psc.scrollHeight);
+    const y = referenceY(psc.scrollTop, psc.clientHeight, pH);
     const ey = mapY(a, y, 1, 0);
     editorScroller.scrollTop = scrollTopForReference(ey, editorScroller.clientHeight, editorScroller.scrollHeight);
   }
@@ -277,7 +375,8 @@ let layoutTimer = 0;
 function onLayoutChange() {
   clearTimeout(layoutTimer);
   layoutTimer = setTimeout(() => {
-    if (settings.previewFit) applyPreviewZoom();
+    applyPreviewZoom();
+    recenterPages();
     remeasurePreview();
     syncFrom(activePane);
   }, 60);
@@ -378,4 +477,4 @@ if (scratch) savedText = ''; // unsaved scratch text counts as dirty
 updateTitle();
 
 // Exposed for debugging / tests.
-window.__mdpdf = { editor, frames: () => frames[front], anchors, syncFrom, settings, get preview() { return preview; } };
+window.__mdpdf = { editor, frames: () => frames[front], anchors, syncFrom, settings, renderFull: () => renderNow({ full: true }), get preview() { return preview; } };
