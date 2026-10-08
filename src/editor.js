@@ -4,6 +4,7 @@ import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
+import { yamlFrontmatter } from '@codemirror/lang-yaml';
 
 const theme = EditorView.theme({
   '&': { height: '100%', fontSize: 'var(--editor-font-size, 14px)' },
@@ -25,7 +26,7 @@ export function createEditor(parent, { doc = '', onChange, onGeometry }) {
       extensions: [
         basicSetup,
         keymap.of([indentWithTab]),
-        markdown({ base: markdownLanguage, codeLanguages: languages }),
+        yamlFrontmatter({ content: markdown({ base: markdownLanguage, codeLanguages: languages }) }),
         EditorView.lineWrapping,
         theme,
         EditorView.updateListener.of((u) => {

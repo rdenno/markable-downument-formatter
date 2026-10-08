@@ -2,7 +2,9 @@
 // The exact same document is used for the live preview and for PDF export,
 // so what you see in the preview is what ends up in the PDF.
 import { renderMarkdown } from './markdown.js';
+import { parseFrontMatter } from './frontmatter.js';
 import pageCss from './page.css';
+import highlightCss from 'highlight.js/styles/github.css';
 
 const PAGE_SIZES = {
   A4: 'A4',
@@ -34,23 +36,36 @@ function escapeAttr(s) {
  * @param {string} opts.pageSize   key of PAGE_SIZES
  * @param {string} opts.title
  * @param {number} opts.pagesLeft  on-screen left offset of the pages (px), to centre them in the preview
+ * @returns {{ html: string, warnings: string[], settings: object }}
  * @param {number|null} opts.startLine  preview only: lay out from the top-level block at this source
  *   line, after pages the app copies in from the previous render (see app.js, incremental rendering)
  */
 export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', title = 'Document', pagesLeft = 24, startLine = null }) {
-  const body = renderMarkdown(markdown);
+  const fm = parseFrontMatter(markdown);
+  // <style> blocks written in the markdown are moved to <head> (in order):
+  // Paged.js only applies @page rules (size, margins, page numbers) from there.
+  const userStyles = [];
+  const body = renderMarkdown(fm.body).replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, (m) => { userStyles.push(m); return ''; });
+  const docTitle = fm.settings.title != null ? String(fm.settings.title) : title;
+  const lang = fm.settings.lang != null ? String(fm.settings.lang) : 'en';
+  // Paged.js sizes pages from the first `size` it finds, so the toolbar's page size is
+  // only emitted when the document doesn't set one itself (front matter or a <style>).
+  const docSetsSize = /\bsize\s*:/.test(fm.css) || /@page[^{]*\{[^}]*\bsize\s*:/i.test(userStyles.join('\n'));
   const size = PAGE_SIZES[pageSize] || 'A4';
   const asset = (p) => new URL(p, assetBase).href;
-  return `<!doctype html>
-<html>
+  const html = `<!doctype html>
+<html lang="${escapeAttr(lang)}">
 <head>
 <meta charset="utf-8">
 <base href="${escapeAttr(baseHref)}">
-<title>${escapeAttr(title)}</title>
+<title>${escapeAttr(docTitle)}</title>
 <link rel="stylesheet" href="${asset('node_modules/katex/dist/katex.min.css')}" data-pagedjs-ignore>
 <style media="screen">${SCREEN_CSS} :root { --pages-left: ${Math.round(pagesLeft)}px; }</style>
-<style>@page { size: ${size}; }</style>
+${docSetsSize ? '' : `<style>@page { size: ${size}; }</style>`}
+<style>${highlightCss}</style>
 <style>${pageCss.replace(/<\/style/gi, '<\\/style')}</style>
+<style>/* front matter */ ${fm.css}</style>
+${userStyles.join('\n')}
 <script>
   // Paged.js lays out one page per animation frame (~16ms each). Yield to the
   // event loop instead so long documents paginate several times faster.
@@ -113,6 +128,7 @@ export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', 
 ${body}
 </body>
 </html>`;
+  return { html, warnings: fm.warnings, settings: fm.settings, docSetsSize };
 }
 
 export const PAGE_SIZE_NAMES = Object.keys(PAGE_SIZES);

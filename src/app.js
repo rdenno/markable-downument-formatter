@@ -118,10 +118,13 @@ function renderNow({ full = false } = {}) {
   setStatus('Rendering…');
   const thisJob = job;
   thisJob.watchdog = setTimeout(() => { if (job === thisJob && !thisJob.done) completeJob(thisJob); }, 30000);
-  frame.srcdoc = buildDocument(text, {
+  const built = buildDocument(text, {
     assetBase: APP_ROOT, baseHref: baseHref(), pageSize: settings.pageSize, title: fileName,
     pagesLeft: centeredLeft(), startLine: plan ? plan.startLine : null,
   });
+  job.warnings = built.warnings;
+  showDocSettings(built.docSetsSize);
+  frame.srcdoc = built.html;
 }
 
 // Called from inside the rendering frame: copies of the pages it can reuse.
@@ -184,7 +187,7 @@ function completeJob(j) {
   remeasurePreview(j.frame);
   if (activePane === 'editor') syncFrom('editor', j.frame);
   const pages = j.frame.contentDocument?.querySelectorAll('.pagedjs_page').length || 0;
-  setStatus(`${pages} page${pages === 1 ? '' : 's'} · ${Math.round(performance.now() - j.started)} ms`);
+  setStatus(`${pages} page${pages === 1 ? '' : 's'} · ${Math.round(performance.now() - j.started)} ms`, j.warnings);
   window.__mdpdfLastRender = { skip: j.skip, ms: performance.now() - j.started }; // for tests
 }
 
@@ -404,7 +407,19 @@ $('#btn-open').onclick = () => cmdOpen();
 $('#btn-save').onclick = () => cmdSave();
 $('#btn-export').onclick = () => cmdExport();
 
-function setStatus(s) { $('#status').textContent = s; }
+function setStatus(s, warnings = []) {
+  const el = $('#status');
+  el.textContent = s;
+  el.classList.toggle('warn', warnings.length > 0);
+  if (warnings.length) el.textContent = '⚠ ' + warnings[0] + (warnings.length > 1 ? ` (+${warnings.length - 1} more)` : '') + ' · ' + s;
+  el.title = warnings.join('\n');
+}
+
+// When the document sets its own page size, it wins over the toolbar.
+function showDocSettings(fromDoc) {
+  pageSel.disabled = fromDoc;
+  pageSel.title = fromDoc ? 'Set by the document itself' : '';
+}
 
 // ---------- commands ----------
 async function confirmDiscard() {
@@ -431,7 +446,7 @@ async function cmdSave(saveAs = false) {
 }
 async function cmdExport() {
   setStatus('Exporting PDF…');
-  const html = buildDocument(currentText(), {
+  const { html } = buildDocument(currentText(), {
     assetBase: APP_ROOT, baseHref: baseHref(), pageSize: settings.pageSize, title: fileName,
   });
   try {
