@@ -90,3 +90,24 @@ img[data-align="right"] { display: block; margin-left: auto; }
 .columns > * { flex: 1 1 0; min-width: 0; }
 .columns > :first-child { margin-top: 0; }
 .columns img { max-width: 100%; }
+
+/* data-align on any block: aligns text, tables, images and code inside it. */
+[data-align="center"] { text-align: center; }
+[data-align="right"] { text-align: right; }
+[data-align="left"] { text-align: left; }
+[data-align="center"] > table, [data-align="center"] > figure, [data-align="center"] > pre,
+[data-align="center"] > img { margin-left: auto; margin-right: auto; }
+[data-align="right"] > table, [data-align="right"] > figure, [data-align="right"] > pre,
+[data-align="right"] > img { margin-left: auto; margin-right: 0; }
+[data-align] > pre { text-align: left; }
+div[data-align] > :last-child { margin-bottom: 0; }
+div[data-align] { margin-bottom: 0.8em; }
+
+/* Vertical alignment of columns: <div class="columns" data-valign="center"> */
+.columns[data-valign="center"], .columns[data-valign="middle"] { align-items: center; }
+.columns[data-valign="bottom"] { align-items: flex-end; }
+.columns > * > :last-child { margin-bottom: 0; }
+
+figure { margin: 0 0 0.8em; break-inside: avoid; }
+figure img { max-width: 100%; }
+figcaption { font-size: 0.9em; color: #555; margin-top: 0.3em; }

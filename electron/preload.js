@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('mdpdf', {
   dirUrl: (p) => ipcRenderer.sendSync('dir-url', p),
   onMenu: (cb) => ipcRenderer.on('menu', (_e, cmd) => cb(cmd)),
   onOpenPath: (cb) => ipcRenderer.on('open-path', (_e, f) => cb(f)),
+  pickImage: (docPath) => ipcRenderer.invoke('pick-image', docPath),
+  editCommand: (cmd) => ipcRenderer.invoke('edit-command', cmd),
 });

@@ -80,18 +80,29 @@ size, the toolbar's page-size picker is disabled.
 
 Relative image paths resolve against the folder of the open `.md` file.
 
-**Columns.** Each child of `.columns` is one column, sharing the width equally
-(give one `style="flex: 2"` to make it twice as wide). Markdown inside HTML is
+**Insert menu.** The toolbar's **Insert ▾** button and the editor's right-click
+menu paste in ready-made snippets: image (picks a file), image with caption,
+two/three columns, centered table, centered block, math, code, page break,
+document settings. The inserted placeholder is selected, ready to type over.
+The snippets use a few readable attributes you can edit:
+
+| Attribute | On | Does |
+|---|---|---|
+| `data-align="left / center / right"` | any `<div>`, `<img>`, `<figure>` | aligns everything inside: text, tables, images |
+| `data-width="2"` or `"40%"` / `"6cm"` | a column | share of the row, or a fixed width |
+| `data-valign="top / center / bottom"` | `<div class="columns">` | vertical alignment of the columns |
+
+**Columns.** Each child of `.columns` is one column. Markdown inside HTML is
 parsed when it has blank lines around it:
 
 ```html
 <div class="columns">
-<div>
+<div data-width="2" data-align="center">
 
 ![](figure.png)
 
 </div>
-<div>
+<div data-width="1">
 
 Text **beside** the figure, with $math$ and lists.
 

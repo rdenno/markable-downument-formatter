@@ -13,6 +13,8 @@ const desktop = native && {
   dirUrl: (p) => native.dirUrl(p),
   onMenu: (cb) => native.onMenu(cb),
   onOpenPath: (cb) => native.onOpenPath(cb),
+  pickImage: (docPath) => native.pickImage(docPath),
+  editCommand: (cmd) => native.editCommand(cmd),
 };
 
 const browser = {

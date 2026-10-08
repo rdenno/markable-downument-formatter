@@ -3,6 +3,7 @@ import { buildDocument, PAGE_SIZE_NAMES } from './document.js';
 import { measurePreviewBlocks, buildAnchors, mapY, referenceY, scrollTopForReference } from './sync.js';
 import { platform } from './platform.js';
 import { planIncremental } from './incremental.js';
+import { TEMPLATES } from './templates.js';
 import WELCOME from './welcome.md';
 
 const $ = (sel) => document.querySelector(sel);
@@ -124,7 +125,7 @@ function renderNow({ full = false } = {}) {
   armWatchdog(job);
   const built = buildDocument(text, {
     assetBase: APP_ROOT, baseHref: baseHref(), pageSize: settings.pageSize, title: fileName,
-    pagesLeft: centeredLeft(), startLine: plan ? plan.startLine : null, darkPages: pagesAreDark(), renderId: job.id,
+    pagesLeft: centeredLeft(), startLine: plan ? plan.startLine : null, darkPages: pagesAreDark(), uiDark: isDark(), renderId: job.id,
   });
   job.warnings = built.warnings;
   showDocSettings(built.docSetsSize);
@@ -274,7 +275,11 @@ function applyTheme() {
   setEditorDark(editor, dark);
   $('#theme').textContent = (dark ? '☾ ' : '☀ ') + THEME_LABEL[settings.theme];
   // Dark pages is a screen-only class, so flipping it never re-lays-out anything.
-  for (const f of frames) f.contentDocument?.documentElement?.classList.toggle('mdpdf-dark', pagesAreDark());
+  for (const f of frames) {
+    const root = f.contentDocument?.documentElement;
+    root?.classList.toggle('mdpdf-dark', pagesAreDark());
+    root?.classList.toggle('mdpdf-ui-dark', dark);
+  }
 }
 
 // ---------- cursor highlight ----------
@@ -566,6 +571,119 @@ async function cmdExport() {
     setStatus(r ? `Exported ${r}` : 'Export cancelled');
   } catch (err) {
     setStatus('Export failed: ' + err.message);
+  }
+}
+
+// ---------- insert menu & editor context menu ----------
+const menuEl = $('#menu');
+
+function showMenu(x, y, items) {
+  menuEl.replaceChildren();
+  for (const item of items) {
+    if (item === '-') { menuEl.append(document.createElement('hr')); continue; }
+    if (item.title) {
+      const t = document.createElement('div');
+      t.className = 'menu-title';
+      t.textContent = item.title;
+      menuEl.append(t);
+      continue;
+    }
+    const b = document.createElement('button');
+    b.textContent = item.label;
+    b.onclick = () => { hideMenu(); item.action(); };
+    menuEl.append(b);
+  }
+  menuEl.hidden = false;
+  const r = menuEl.getBoundingClientRect();
+  menuEl.style.left = Math.max(4, Math.min(x, innerWidth - r.width - 4)) + 'px';
+  menuEl.style.top = Math.max(4, Math.min(y, innerHeight - r.height - 4)) + 'px';
+  menuEl.querySelector('button')?.focus();
+}
+function hideMenu() { menuEl.hidden = true; }
+
+menuEl.addEventListener('keydown', (e) => {
+  const buttons = [...menuEl.querySelectorAll('button')];
+  const i = buttons.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown') { e.preventDefault(); buttons[(i + 1) % buttons.length].focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); buttons[(i - 1 + buttons.length) % buttons.length].focus(); }
+  else if (e.key === 'Escape') { hideMenu(); editor.focus(); }
+});
+window.addEventListener('pointerdown', (e) => { if (!menuEl.hidden && !menuEl.contains(e.target)) hideMenu(); }, true);
+window.addEventListener('blur', hideMenu);
+
+function templateItems() {
+  return TEMPLATES.map((t) => ({ label: t.label + (t.id === 'image' || t.id === 'figure' ? '…' : ''), action: () => insertTemplate(t) }));
+}
+
+async function insertTemplate(t) {
+  let text = t.text;
+  let select = t.select;
+  if ((t.id === 'image' || t.id === 'figure') && platform.pickImage) {
+    const src = await platform.pickImage(filePath);
+    if (src === null) return; // cancelled
+    if (src) { text = text.replace('image.png', src.replace(/"/g, '&quot;')); select = t.id === 'figure' ? 'Caption' : '60%'; }
+  }
+  const st = editor.state;
+  let from, to, insert;
+  if (t.atTop) {
+    if (/^---[ \t]*\r?\n/.test(st.doc.toString())) {
+      editor.dispatch({ selection: { anchor: 0 }, scrollIntoView: true });
+      editor.focus();
+      setStatus('This document already has settings at the top');
+      return;
+    }
+    from = to = 0;
+    insert = text + '\n\n';
+  } else {
+    // Always on its own lines, with a blank line before and after.
+    const line = st.doc.lineAt(st.selection.main.head);
+    const blank = (n) => n < 1 || n > st.doc.lines || st.doc.line(n).text.trim() === '';
+    if (line.text.trim() === '') {
+      from = line.from; to = line.to;
+      insert = (blank(line.number - 1) ? '' : '\n') + text + (blank(line.number + 1) ? '' : '\n');
+    } else {
+      from = to = line.to;
+      insert = '\n\n' + text + (blank(line.number + 1) ? '\n' : '\n\n');
+    }
+  }
+  const at = select ? insert.indexOf(select) : -1;
+  const selection = at >= 0
+    ? { anchor: from + at, head: from + at + select.length }
+    : { anchor: from + insert.trimEnd().length };
+  editor.dispatch({ changes: { from, to, insert }, selection, scrollIntoView: true });
+  editor.focus();
+}
+
+$('#btn-insert').onclick = (e) => {
+  const r = e.currentTarget.getBoundingClientRect();
+  showMenu(r.left, r.bottom + 4, templateItems());
+};
+
+editorHost.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const hasSelection = !editor.state.selection.main.empty;
+  showMenu(e.clientX, e.clientY, [
+    ...(hasSelection ? [{ label: 'Cut', action: () => editCommand('cut') }, { label: 'Copy', action: () => editCommand('copy') }] : []),
+    { label: 'Paste', action: () => editCommand('paste') },
+    { label: 'Select all', action: () => editCommand('selectAll') },
+    '-',
+    { title: 'Insert' },
+    ...templateItems(),
+  ]);
+});
+
+async function editCommand(cmd) {
+  editor.focus();
+  if (platform.editCommand) return platform.editCommand(cmd);
+  if (cmd === 'paste') {
+    try {
+      const text = await navigator.clipboard.readText();
+      editor.dispatch(editor.state.replaceSelection(text));
+    } catch { setStatus('Paste with Ctrl+V'); }
+  } else if (cmd === 'selectAll') {
+    editor.dispatch({ selection: { anchor: 0, head: editor.state.doc.length } });
+  } else {
+    document.execCommand(cmd);
   }
 }
 

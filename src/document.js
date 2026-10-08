@@ -23,6 +23,8 @@ body { margin: 0; }
 .pagedjs_pages { display: flex; flex-direction: column; padding: 24px 24px 24px var(--pages-left, 24px); gap: 24px; width: max-content; }
 /* Dark pages (screen only): invert each page, then invert images back so they
    keep their real colours. Filters don't affect layout, so pagination is unchanged. */
+/* Dark UI: dark scrollbars and desk, even when the pages themselves stay light. */
+html.mdpdf-ui-dark { color-scheme: dark; background: #34363c; }
 html.mdpdf-dark { background: #34363c; }
 html.mdpdf-dark .pagedjs_page { filter: invert(0.92) hue-rotate(180deg); box-shadow: none; }
 html.mdpdf-dark .pagedjs_page img, html.mdpdf-dark .pagedjs_page video, html.mdpdf-dark .pagedjs_page picture,
@@ -50,7 +52,7 @@ function escapeAttr(s) {
  * @param {number|null} opts.startLine  preview only: lay out from the top-level block at this source
  *   line, after pages the app copies in from the previous render (see app.js, incremental rendering)
  */
-export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', title = 'Document', pagesLeft = 24, startLine = null, darkPages = false, renderId = 0 }) {
+export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', title = 'Document', pagesLeft = 24, startLine = null, darkPages = false, uiDark = false, renderId = 0 }) {
   const fm = parseFrontMatter(markdown);
   // <style> blocks written in the markdown are moved to <head> (in order):
   // Paged.js only applies @page rules (size, margins, page numbers) from there.
@@ -64,7 +66,7 @@ export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', 
   const size = PAGE_SIZES[pageSize] || 'A4';
   const asset = (p) => new URL(p, assetBase).href;
   const html = `<!doctype html>
-<html lang="${escapeAttr(lang)}"${darkPages ? ' class="mdpdf-dark"' : ''}>
+<html lang="${escapeAttr(lang)}" class="${uiDark ? 'mdpdf-ui-dark' : ''}${darkPages ? ' mdpdf-dark' : ''}">
 <head>
 <meta charset="utf-8">
 <base href="${escapeAttr(baseHref)}">
@@ -127,6 +129,14 @@ ${userStyles.join('\n')}
         var st = document.createElement('style');
         st.textContent = rules.join(' ');
         document.head.appendChild(st);
+      }
+
+      // Column widths: data-width="2" is a share of the row, "40%" / "6cm" a fixed width.
+      var cols = document.querySelectorAll('.columns > [data-width]');
+      for (var c = 0; c < cols.length; c++) {
+        var w = cols[c].getAttribute('data-width').trim();
+        if (/^[0-9]+([.][0-9]+)?$/.test(w)) cols[c].style.flex = w + ' 1 0';
+        else if (/^[0-9]+([.][0-9]+)?(%|cm|mm|in|pt|px|em)$/.test(w)) cols[c].style.flex = '0 0 ' + w;
       }
 
       // Loose text next to block elements (e.g. text right after a raw-HTML <div>)

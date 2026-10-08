@@ -132,6 +132,25 @@ ipcMain.handle('confirm-discard', (_e, name) => {
   }) === 0;
 });
 
+// Image for the Insert menu: returns a path relative to the document when it has
+// been saved (so the folder can be moved), otherwise a file:// URL; null if cancelled.
+ipcMain.handle('pick-image', async (_e, docPath) => {
+  const r = await dialog.showOpenDialog(win, {
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp'] }],
+  });
+  if (r.canceled || !r.filePaths[0]) return null;
+  const img = r.filePaths[0];
+  if (!docPath) return pathToFileURL(img).href;
+  const rel = path.relative(path.dirname(docPath), img);
+  if (path.isAbsolute(rel)) return pathToFileURL(img).href; // e.g. a different drive on Windows
+  return rel.split(path.sep).map(encodeURIComponent).join('/');
+});
+
+ipcMain.handle('edit-command', (_e, cmd) => {
+  if (['cut', 'copy', 'paste', 'selectAll'].includes(cmd)) win.webContents[cmd]();
+});
+
 ipcMain.on('set-dirty', (_e, d) => { dirty = !!d; });
 ipcMain.on('dir-url', (e, p) => { e.returnValue = pathToFileURL(path.dirname(p)).href + '/'; });
 
