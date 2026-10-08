@@ -16,6 +16,7 @@
     <label>Page <select id="page-size"></select></label>
     <label title="Keep both panes scrolled to the same place"><input type="checkbox" id="sync"> Scroll sync</label>
     <label title="Highlight the block under the editor cursor in the preview (never printed)"><input type="checkbox" id="highlight"> Highlight cursor</label>
+    <button id="theme" title="Colour theme: follow the system, light, or dark"></button>
     <button id="btn-export" class="primary" title="Export PDF (Ctrl+E)">Export PDF</button>
   </header>
   <main id="main">
@@ -35,6 +36,7 @@
       <div class="pane-head">
         <span>Preview</span>
         <span id="status"></span>
+        <label id="dark-pages-label" title="Show pages with inverted colours (images keep theirs). The PDF is never affected."><input type="checkbox" id="dark-pages"> Dark pages</label>
         <span class="zoom">
           <button id="preview-zoom-out" title="Zoom out">−</button>
           <span id="preview-zoom-label"></span>

@@ -5,8 +5,28 @@
   --text: #222;
   --muted: #777;
   --accent: #2563eb;
+  --hover: #f0f1f3;
+  --active-bg: #e3ebfd;
+  --active-border: #b9cdf9;
+  --desk: #d9dbdf;
+  --warn: #b45309;
+  color-scheme: light;
   font: 13px/1.4 -apple-system, "Segoe UI", system-ui, Helvetica, Arial, sans-serif;
   color: var(--text);
+}
+:root[data-theme="dark"] {
+  --bg: #1b1c1f;
+  --panel: #232428;
+  --border: #36383d;
+  --text: #e3e4e8;
+  --muted: #9a9ca3;
+  --accent: #4f8cff;
+  --hover: #2d2f34;
+  --active-bg: #1f3157;
+  --active-border: #36508a;
+  --desk: #34363c;
+  --warn: #f0a648;
+  color-scheme: dark;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; }
@@ -19,10 +39,10 @@ button, select {
   background: var(--panel); border: 1px solid var(--border); border-radius: 5px;
   padding: 3px 10px; cursor: pointer;
 }
-button:hover { background: #f0f1f3; }
+button:hover { background: var(--hover); }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.primary:hover { background: #1d4fd8; }
-button.active { background: #e3ebfd; border-color: #b9cdf9; color: var(--accent); }
+button.active { background: var(--active-bg); border-color: var(--active-border); color: var(--accent); }
 
 #toolbar {
   display: flex; align-items: center; gap: 8px;
@@ -55,10 +75,10 @@ button.active { background: #e3ebfd; border-color: #b9cdf9; color: var(--accent)
 .frames iframe {
   position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0;
   transform-origin: 0 0;
-  background: #d9dbdf; visibility: hidden;
+  background: var(--desk); visibility: hidden;
 }
 #frame-a { visibility: visible; }
-#status.warn { color: #b45309; }
+#status.warn { color: var(--warn); }
 select:disabled { opacity: .5; cursor: default; }
 
 /* Thin moving bar under the preview header while a render is in progress. */
@@ -70,3 +90,7 @@ select:disabled { opacity: .5; cursor: default; }
   animation: busy-slide 1.1s ease-in-out infinite;
 }
 @keyframes busy-slide { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+
+#theme { min-width: 64px; }
+#dark-pages-label { display: none; align-items: center; gap: 4px; white-space: nowrap; }
+:root[data-theme="dark"] #dark-pages-label { display: flex; }

@@ -21,6 +21,12 @@ body { margin: 0; }
    positions while laying out, so they must not move if the frame is resized mid-render.
    The app re-centres them via --pages-left once a render is finished. */
 .pagedjs_pages { display: flex; flex-direction: column; padding: 24px 24px 24px var(--pages-left, 24px); gap: 24px; width: max-content; }
+/* Dark pages (screen only): invert each page, then invert images back so they
+   keep their real colours. Filters don't affect layout, so pagination is unchanged. */
+html.mdpdf-dark { background: #34363c; }
+html.mdpdf-dark .pagedjs_page { filter: invert(0.92) hue-rotate(180deg); box-shadow: none; }
+html.mdpdf-dark .pagedjs_page img, html.mdpdf-dark .pagedjs_page video, html.mdpdf-dark .pagedjs_page picture,
+html.mdpdf-dark .pagedjs_page canvas, html.mdpdf-dark .pagedjs_page svg image { filter: invert(1) hue-rotate(180deg); }
 /* Block under the editor cursor (preview only; this stylesheet is never printed). */
 .mdpdf-cursor-block { background-color: rgba(37, 99, 235, .07); box-shadow: 0 0 0 3px rgba(37, 99, 235, .07); border-radius: 2px; }
 .mdpdf-cursor-block > td, .mdpdf-cursor-block > th { background-color: rgba(37, 99, 235, .09); }
@@ -40,10 +46,11 @@ function escapeAttr(s) {
  * @param {string} opts.title
  * @param {number} opts.pagesLeft  on-screen left offset of the pages (px), to centre them in the preview
  * @returns {{ html: string, warnings: string[], settings: object }}
+ * @param {boolean} opts.darkPages  preview only: show pages in dark colours (screen-only CSS)
  * @param {number|null} opts.startLine  preview only: lay out from the top-level block at this source
  *   line, after pages the app copies in from the previous render (see app.js, incremental rendering)
  */
-export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', title = 'Document', pagesLeft = 24, startLine = null }) {
+export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', title = 'Document', pagesLeft = 24, startLine = null, darkPages = false }) {
   const fm = parseFrontMatter(markdown);
   // <style> blocks written in the markdown are moved to <head> (in order):
   // Paged.js only applies @page rules (size, margins, page numbers) from there.
@@ -57,7 +64,7 @@ export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', 
   const size = PAGE_SIZES[pageSize] || 'A4';
   const asset = (p) => new URL(p, assetBase).href;
   const html = `<!doctype html>
-<html lang="${escapeAttr(lang)}">
+<html lang="${escapeAttr(lang)}"${darkPages ? ' class="mdpdf-dark"' : ''}>
 <head>
 <meta charset="utf-8">
 <base href="${escapeAttr(baseHref)}">

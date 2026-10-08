@@ -1,4 +1,4 @@
-import { createEditor, setEditorDoc, editorYForLine } from './editor.js';
+import { createEditor, setEditorDoc, editorYForLine, setEditorDark } from './editor.js';
 import { buildDocument, PAGE_SIZE_NAMES } from './document.js';
 import { measurePreviewBlocks, buildAnchors, mapY, referenceY, scrollTopForReference } from './sync.js';
 import { platform } from './platform.js';
@@ -10,7 +10,7 @@ const APP_ROOT = new URL('./', location.href).href;
 
 // ---------- persisted settings ----------
 const settings = Object.assign(
-  { pageSize: 'A4', editorFontSize: 14, previewZoom: 1, previewFit: true, split: 0.5, sync: true, highlight: true },
+  { pageSize: 'A4', editorFontSize: 14, previewZoom: 1, previewFit: true, split: 0.5, sync: true, highlight: true, theme: 'system', darkPages: true },
   safeJson(localStorageGet('mdpdf.settings')),
 );
 function saveSettings() { localStorageSet('mdpdf.settings', JSON.stringify(settings)); }
@@ -122,7 +122,7 @@ function renderNow({ full = false } = {}) {
   armWatchdog(job);
   const built = buildDocument(text, {
     assetBase: APP_ROOT, baseHref: baseHref(), pageSize: settings.pageSize, title: fileName,
-    pagesLeft: centeredLeft(), startLine: plan ? plan.startLine : null,
+    pagesLeft: centeredLeft(), startLine: plan ? plan.startLine : null, darkPages: pagesAreDark(),
   });
   job.warnings = built.warnings;
   showDocSettings(built.docSetsSize);
@@ -249,6 +249,27 @@ function remeasurePreview(frame = frames[front], minHeight = 0) {
   const m = measurePreviewBlocks(d);
   const page = d.querySelector('.pagedjs_page');
   preview = { ...m, scrollHeight: Math.max(m.scrollHeight, minHeight), pageWidth: page ? page.offsetWidth : 0 };
+}
+
+// ---------- theme ----------
+const systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+const THEMES = ['system', 'light', 'dark'];
+const THEME_LABEL = { system: 'Auto', light: 'Light', dark: 'Dark' };
+
+function isDark() {
+  return settings.theme === 'dark' || (settings.theme === 'system' && systemDark.matches);
+}
+function pagesAreDark() {
+  return isDark() && settings.darkPages;
+}
+
+function applyTheme() {
+  const dark = isDark();
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  setEditorDark(editor, dark);
+  $('#theme').textContent = (dark ? '☾ ' : '☀ ') + THEME_LABEL[settings.theme];
+  // Dark pages is a screen-only class, so flipping it never re-lays-out anything.
+  for (const f of frames) f.contentDocument?.documentElement?.classList.toggle('mdpdf-dark', pagesAreDark());
 }
 
 // ---------- cursor highlight ----------
@@ -455,6 +476,16 @@ for (const name of PAGE_SIZE_NAMES) pageSel.add(new Option(name, name));
 pageSel.value = settings.pageSize;
 pageSel.addEventListener('change', () => { settings.pageSize = pageSel.value; saveSettings(); renderNow(); });
 
+$('#theme').onclick = () => {
+  settings.theme = THEMES[(THEMES.indexOf(settings.theme) + 1) % THEMES.length];
+  saveSettings();
+  applyTheme();
+};
+systemDark.addEventListener('change', applyTheme);
+const darkPagesBox = $('#dark-pages');
+darkPagesBox.checked = settings.darkPages;
+darkPagesBox.addEventListener('change', () => { settings.darkPages = darkPagesBox.checked; saveSettings(); applyTheme(); });
+
 const highlightBox = $('#highlight');
 highlightBox.checked = settings.highlight;
 highlightBox.addEventListener('change', () => { settings.highlight = highlightBox.checked; saveSettings(); applyHighlight(); });
@@ -556,6 +587,7 @@ platform.onOpenPath?.((f) => loadDocument(f.text, f.path, f.name));
 
 // ---------- boot ----------
 applySplit();
+applyTheme();
 setEditorFontSize(settings.editorFontSize);
 const scratch = localStorageGet('mdpdf.scratch');
 loadDocument(scratch != null && scratch !== '' ? scratch : WELCOME, null, 'Untitled.md');
