@@ -23,6 +23,8 @@ $$
 | Page setup     | front matter (see below) or `<style>@page { margin: 1in; }</style>` |
 | Change font    | front matter or `<style>body { font-family: Arial; }</style>` |
 | Keep together  | `<div style="break-inside: avoid">…</div>` |
+| Center image   | `<img src="pic.png" data-align="center">` |
+| Two columns    | `<div class="columns"><div>…</div><div>…</div></div>` |
 
 ```python
 def hello():

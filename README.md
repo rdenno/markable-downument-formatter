@@ -74,9 +74,30 @@ size, the toolbar's page-size picker is disabled.
 | Font                     | front matter, or `<style>body { font-family: Arial; }</style>` |
 | Keep a block on one page | `<div style="break-inside: avoid"> … </div>`              |
 | Image size               | `<img src="pic.png" width="300">`                         |
+| Centered image           | `<img src="pic.png" data-align="center">` (also `left` / `right`), or `<p align="center"><img …></p>` |
+| Side-by-side, no borders | `<div class="columns">` with one `<div>` per column (see below) |
 | Anything else            | CSS in a `<style>` block, anywhere in the document        |
 
 Relative image paths resolve against the folder of the open `.md` file.
+
+**Columns.** Each child of `.columns` is one column, sharing the width equally
+(give one `style="flex: 2"` to make it twice as wide). Markdown inside HTML is
+parsed when it has blank lines around it:
+
+```html
+<div class="columns">
+<div>
+
+![](figure.png)
+
+</div>
+<div>
+
+Text **beside** the figure, with $math$ and lists.
+
+</div>
+</div>
+```
 
 ## Editor
 

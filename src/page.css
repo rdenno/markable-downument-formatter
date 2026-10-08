@@ -77,3 +77,16 @@ li > p { margin: 0 0 0.3em; }
 
 /* \newpage, \pagebreak, or any element with this class */
 .page-break { break-after: page; height: 0; margin: 0; }
+
+/* <img data-align="center|left|right">: a convention from other Markdown editors. */
+img[data-align="center"] { display: block; margin-left: auto; margin-right: auto; }
+img[data-align="left"] { display: block; margin-right: auto; }
+img[data-align="right"] { display: block; margin-left: auto; }
+
+/* Side-by-side columns without table borders:
+   <div class="columns"> <div>…</div> <div>…</div> </div>
+   Each child is one column, sharing the width equally (override with style="flex: 2"). */
+.columns { display: flex; gap: 1.5em; align-items: flex-start; break-inside: avoid; margin: 0 0 0.8em; }
+.columns > * { flex: 1 1 0; min-width: 0; }
+.columns > :first-child { margin-top: 0; }
+.columns img { max-width: 100%; }

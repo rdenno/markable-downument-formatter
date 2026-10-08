@@ -50,7 +50,7 @@ function escapeAttr(s) {
  * @param {number|null} opts.startLine  preview only: lay out from the top-level block at this source
  *   line, after pages the app copies in from the previous render (see app.js, incremental rendering)
  */
-export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', title = 'Document', pagesLeft = 24, startLine = null, darkPages = false }) {
+export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', title = 'Document', pagesLeft = 24, startLine = null, darkPages = false, renderId = 0 }) {
   const fm = parseFrontMatter(markdown);
   // <style> blocks written in the markdown are moved to <head> (in order):
   // Paged.js only applies @page rules (size, margins, page numbers) from there.
@@ -82,7 +82,7 @@ ${userStyles.join('\n')}
     function report(msg) {
       if (window.__pagedError || window.__pagedDone) return;
       window.__pagedError = String(msg || 'unknown error');
-      try { window.parent.postMessage({ type: 'paged-error', message: window.__pagedError }, '*'); } catch (e) {}
+      try { window.parent.postMessage({ type: 'paged-error', message: window.__pagedError, renderId: window.__mdpdfRenderId }, '*'); } catch (e) {}
     }
     window.addEventListener('error', function (e) {
       if (e.filename && !/paged\.polyfill/.test(e.filename)) return; // the document's own scripts
@@ -99,6 +99,7 @@ ${userStyles.join('\n')}
     window.requestAnimationFrame = function (cb) { queue.push(cb); if (queue.length === 1) ch.port2.postMessage(0); return 0; };
     window.__restoreRaf = function () { window.requestAnimationFrame = raf; };
   })();
+  window.__mdpdfRenderId = ${Number(renderId)};
   window.__mdpdfStartLine = ${startLine == null ? 'null' : Number(startLine)};
   window.PagedConfig = {
     auto: true,
@@ -178,7 +179,7 @@ ${userStyles.join('\n')}
     after: function () {
       window.__restoreRaf();
       window.__pagedDone = true;
-      try { window.parent.postMessage({ type: 'paged-done' }, '*'); } catch (e) {}
+      try { window.parent.postMessage({ type: 'paged-done', renderId: window.__mdpdfRenderId }, '*'); } catch (e) {}
     }
   };
 </script>
@@ -199,7 +200,7 @@ ${userStyles.join('\n')}
     });
     PagedPolyfill.on('page', function () {
       n++;
-      try { window.parent.postMessage({ type: 'paged-page', count: n }, '*'); } catch (e) {}
+      try { window.parent.postMessage({ type: 'paged-page', count: n, renderId: window.__mdpdfRenderId }, '*'); } catch (e) {}
     });
   })();
 </script>

@@ -101,6 +101,7 @@ function pagesInView() {
 
 // What the front frame's (complete) render was made from, for incremental renders.
 let frontSource = null;
+let renderSeq = 0;
 
 function layoutKey() {
   return [settings.pageSize, baseHref()].join('|');
@@ -115,14 +116,15 @@ function renderNow({ full = false } = {}) {
   const text = currentText();
   const key = layoutKey();
   const plan = full ? null : planIncremental(frontSource, text, key);
-  job = { frame, text, key, target: pagesInView(), swapped: false, done: false, started: performance.now(), pages: 0,
+  renderSeq++;
+  job = { id: renderSeq, frame, text, key, target: pagesInView(), swapped: false, done: false, started: performance.now(), pages: 0,
     prevHeight: preview.scrollHeight, skip: plan ? plan.skipPages : 0, prefixFrom: plan ? frames[front] : null };
   setStatus('Rendering…');
   setBusy(true);
   armWatchdog(job);
   const built = buildDocument(text, {
     assetBase: APP_ROOT, baseHref: baseHref(), pageSize: settings.pageSize, title: fileName,
-    pagesLeft: centeredLeft(), startLine: plan ? plan.startLine : null, darkPages: pagesAreDark(),
+    pagesLeft: centeredLeft(), startLine: plan ? plan.startLine : null, darkPages: pagesAreDark(), renderId: job.id,
   });
   job.warnings = built.warnings;
   showDocSettings(built.docSetsSize);
@@ -132,7 +134,7 @@ function renderNow({ full = false } = {}) {
 // Called from inside the rendering frame: copies of the pages it can reuse.
 window.__mdpdfPrefixPages = (doc) => {
   const j = job;
-  if (!j || !j.prefixFrom || doc !== j.frame.contentDocument) return null;
+  if (!j || !j.prefixFrom || doc !== j.frame.contentDocument || doc.defaultView.__mdpdfRenderId !== j.id) return null;
   const pages = [...j.prefixFrom.contentDocument.querySelectorAll('.pagedjs_page')].slice(0, j.skip);
   if (pages.length !== j.skip) return null;
   return pages.map((p) => {
@@ -155,7 +157,9 @@ function armWatchdog(j) {
 
 window.addEventListener('message', (e) => {
   const j = job;
-  if (!j || j.done || e.source !== j.frame.contentWindow) return;
+  // The same iframe is reused, so a cancelled render's late messages come from
+  // the same window: only accept messages carrying this render's id.
+  if (!j || j.done || e.source !== j.frame.contentWindow || e.data?.renderId !== j.id) return;
   if (e.data?.type === 'paged-error') {
     j.error = e.data.message;
     completeJob(j);
@@ -207,6 +211,7 @@ function completeJob(j) {
   if (j.skip && d) finishIncremental(d);
   if (!j.swapped) swapIn(j);
   frontSource = win && win.__pagedDone && !j.error ? { text: j.text, key: j.key, doc: d } : null;
+  applyPreviewZoom(); // the finished document may now need a scrollbar: refit around it
   recenterPages();
   remeasurePreview(j.frame);
   if (activePane === 'editor') syncFrom('editor', j.frame);
@@ -313,7 +318,12 @@ function applyPreviewZoom() {
   const host = $('.frames');
   const W = host.clientWidth, H = host.clientHeight;
   let z = settings.previewZoom;
-  if (settings.previewFit && preview.pageWidth) z = W / (preview.pageWidth + 48); // room for padding + scrollbar
+  if (settings.previewFit && preview.pageWidth) {
+    // Fit the page plus its side padding, and the frame's own vertical scrollbar if it takes space.
+    const win = frames[front].contentWindow, sc = previewScroller(frames[front]);
+    const scrollbar = win && sc ? Math.max(0, win.innerWidth - sc.clientWidth) : 0;
+    z = W / (preview.pageWidth + 48 + scrollbar);
+  }
   z = Math.min(4, Math.max(0.1, z));
   previewZoomValue = z;
   for (const f of frames) {
