@@ -111,6 +111,8 @@ ipcMain.handle('export-pdf', async (_e, { html, name, path: docPath }) => {
     await pdfWin.loadFile(tmp);
     const deadline = Date.now() + 60000;
     while (!(await pdfWin.webContents.executeJavaScript('window.__pagedDone === true'))) {
+      const crashed = await pdfWin.webContents.executeJavaScript('window.__pagedError || null');
+      if (crashed) throw new Error('page layout failed: ' + crashed);
       if (Date.now() > deadline) throw new Error('Timed out laying out pages');
       await new Promise((res) => setTimeout(res, 100));
     }

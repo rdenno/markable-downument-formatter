@@ -67,6 +67,19 @@ ${docSetsSize ? '' : `<style>@page { size: ${size}; }</style>`}
 <style>/* front matter */ ${fm.css}</style>
 ${userStyles.join('\n')}
 <script>
+  // Report any crash in the layout engine straight away rather than stalling.
+  (function () {
+    function report(msg) {
+      if (window.__pagedError || window.__pagedDone) return;
+      window.__pagedError = String(msg || 'unknown error');
+      try { window.parent.postMessage({ type: 'paged-error', message: window.__pagedError }, '*'); } catch (e) {}
+    }
+    window.addEventListener('error', function (e) {
+      if (e.filename && !/paged\.polyfill/.test(e.filename)) return; // the document's own scripts
+      report(e.message);
+    });
+    window.addEventListener('unhandledrejection', function (e) { report(e.reason && (e.reason.message || e.reason)); });
+  })();
   // Paged.js lays out one page per animation frame (~16ms each). Yield to the
   // event loop instead so long documents paginate several times faster.
   (function () {
@@ -80,6 +93,63 @@ ${userStyles.join('\n')}
   window.PagedConfig = {
     auto: true,
     before: function () {
+      // Page breaks written as inline styles (<div style="page-break-after: always">)
+      // are invisible to Paged.js, which only reads stylesheets, and the browser
+      // applying them natively mid-layout can crash it. Move them into a stylesheet.
+      var rules = [], count = 0;
+      var withStyle = document.body.querySelectorAll('[style]');
+      for (var i = 0; i < withStyle.length; i++) {
+        var el = withStyle[i], decls = [];
+        ['break-before', 'break-after', 'break-inside'].forEach(function (prop) {
+          var value = el.style.getPropertyValue(prop); // page-break-* map onto these
+          if (!value) return;
+          decls.push(prop + ': ' + value + ';');
+          el.style.removeProperty(prop);
+          el.style.removeProperty('page-' + prop);
+        });
+        if (!decls.length) continue;
+        var cls = 'mdpdf-inline-break-' + (++count);
+        el.classList.add(cls);
+        rules.push('.' + cls + ' { ' + decls.join(' ') + ' }');
+      }
+      if (rules.length) {
+        var st = document.createElement('style');
+        st.textContent = rules.join(' ');
+        document.head.appendChild(st);
+      }
+
+      // Loose text next to block elements (e.g. text right after a raw-HTML <div>)
+      // is laid out by browsers as an invisible "anonymous" block. Paged.js can't
+      // break pages around bare text: it ignores the break or crashes. Give each
+      // such run of text a real (unstyled) <div>, which renders identically.
+      var parents = [], seen = new Set(), walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), t;
+      while ((t = walker.nextNode())) {
+        if (t.data.trim() && !seen.has(t.parentNode)) { seen.add(t.parentNode); parents.push(t.parentNode); }
+      }
+      var isInline = function (n) {
+        if (n.nodeType !== 1) return true; // text, comments
+        var d = getComputedStyle(n).display;
+        return d.indexOf('inline') === 0 || d === 'none' || d === 'contents';
+      };
+      parents.forEach(function (parent) {
+        if (parent.closest('.katex, pre, svg, math, script, style, textarea, select')) return;
+        var kids = Array.prototype.slice.call(parent.childNodes);
+        if (kids.every(isInline)) return; // ordinary inline content: nothing to do
+        var run = [];
+        var flush = function () {
+          var hasText = run.some(function (n) { return n.nodeType === 3 && n.data.trim(); });
+          if (hasText) {
+            var box = document.createElement('div');
+            box.className = 'mdpdf-anonymous-block';
+            parent.insertBefore(box, run[0]);
+            run.forEach(function (n) { box.appendChild(n); });
+          }
+          run = [];
+        };
+        kids.forEach(function (n) { if (isInline(n)) run.push(n); else flush(); });
+        flush();
+      });
+
       // Incremental preview: drop the blocks that the reused pages already show.
       window.__mdpdfCut = false;
       var L = window.__mdpdfStartLine;

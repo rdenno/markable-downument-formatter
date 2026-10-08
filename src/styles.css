@@ -60,3 +60,13 @@ button.active { background: #e3ebfd; border-color: #b9cdf9; color: var(--accent)
 #frame-a { visibility: visible; }
 #status.warn { color: #b45309; }
 select:disabled { opacity: .5; cursor: default; }
+
+/* Thin moving bar under the preview header while a render is in progress. */
+#preview-pane .pane-head { position: relative; }
+#preview-pane.busy .pane-head::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 40% 100%; background-repeat: no-repeat;
+  animation: busy-slide 1.1s ease-in-out infinite;
+}
+@keyframes busy-slide { from { background-position: -40% 0; } to { background-position: 140% 0; } }

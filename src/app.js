@@ -116,8 +116,8 @@ function renderNow({ full = false } = {}) {
   job = { frame, text, key, target: pagesInView(), swapped: false, done: false, started: performance.now(), pages: 0,
     prevHeight: preview.scrollHeight, skip: plan ? plan.skipPages : 0, prefixFrom: plan ? frames[front] : null };
   setStatus('Rendering…');
-  const thisJob = job;
-  thisJob.watchdog = setTimeout(() => { if (job === thisJob && !thisJob.done) completeJob(thisJob); }, 30000);
+  setBusy(true);
+  armWatchdog(job);
   const built = buildDocument(text, {
     assetBase: APP_ROOT, baseHref: baseHref(), pageSize: settings.pageSize, title: fileName,
     pagesLeft: centeredLeft(), startLine: plan ? plan.startLine : null,
@@ -136,11 +136,27 @@ window.__mdpdfPrefixPages = (doc) => {
   return pages.map((p) => doc.importNode(p, true));
 };
 
+// If layout stops making progress, stop waiting and say so.
+function armWatchdog(j) {
+  clearTimeout(j.watchdog);
+  j.watchdog = setTimeout(() => {
+    if (job !== j || j.done) return;
+    j.error = 'layout stopped responding';
+    haltPaged(j.frame);
+    completeJob(j);
+  }, 15000);
+}
+
 window.addEventListener('message', (e) => {
   const j = job;
   if (!j || j.done || e.source !== j.frame.contentWindow) return;
-  if (e.data?.type === 'paged-page') {
+  if (e.data?.type === 'paged-error') {
+    j.error = e.data.message;
+    completeJob(j);
+  } else if (e.data?.type === 'paged-page') {
     j.pages = e.data.count;
+    armWatchdog(j);
+    if (j.pages > 1) setStatus(`Rendering… page ${j.skip + j.pages}`);
     // `count` pages exist, so all but the last are fully laid out.
     if (!j.swapped && j.skip + j.pages - 1 >= j.target) swapIn(j);
   } else if (e.data?.type === 'paged-done') {
@@ -175,19 +191,28 @@ function completeJob(j) {
   clearTimeout(j.watchdog);
   const win = j.frame.contentWindow;
   const d = j.frame.contentDocument;
-  if (j.skip && win && win.__mdpdfPrefixCount !== j.skip) {
+  setBusy(false);
+  if (j.skip && win && win.__mdpdfPrefixCount !== j.skip && !j.error) {
     // Reuse didn't happen as planned; fall back to a full render.
     renderNow({ full: true });
     return;
   }
   if (j.skip && d) finishIncremental(d);
   if (!j.swapped) swapIn(j);
-  frontSource = win && win.__pagedDone ? { text: j.text, key: j.key, doc: d } : null;
+  frontSource = win && win.__pagedDone && !j.error ? { text: j.text, key: j.key, doc: d } : null;
   recenterPages();
   remeasurePreview(j.frame);
   if (activePane === 'editor') syncFrom('editor', j.frame);
   const pages = j.frame.contentDocument?.querySelectorAll('.pagedjs_page').length || 0;
-  setStatus(`${pages} page${pages === 1 ? '' : 's'} · ${Math.round(performance.now() - j.started)} ms`, j.warnings);
+  if (j.error) {
+    // Keep whatever was laid out, and say exactly what happened.
+    setStatus(`${pages} page${pages === 1 ? '' : 's'} (incomplete)`, [
+      `Page layout failed after page ${pages}: ${j.error}. Export may be incomplete too.`,
+      ...j.warnings,
+    ]);
+  } else {
+    setStatus(`${pages} page${pages === 1 ? '' : 's'} · ${Math.round(performance.now() - j.started)} ms`, j.warnings);
+  }
   window.__mdpdfLastRender = { skip: j.skip, ms: performance.now() - j.started }; // for tests
 }
 
@@ -413,6 +438,10 @@ function setStatus(s, warnings = []) {
   el.classList.toggle('warn', warnings.length > 0);
   if (warnings.length) el.textContent = '⚠ ' + warnings[0] + (warnings.length > 1 ? ` (+${warnings.length - 1} more)` : '') + ' · ' + s;
   el.title = warnings.join('\n');
+}
+
+function setBusy(on) {
+  $('#preview-pane').classList.toggle('busy', on);
 }
 
 // When the document sets its own page size, it wins over the toolbar.
