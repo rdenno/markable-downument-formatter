@@ -150,3 +150,19 @@ md.renderer.rules.math_block = (tokens, idx, options, env, self) =>
 export function renderMarkdown(src) {
   return md.render(src);
 }
+
+/**
+ * Top-level blocks of a document as source line ranges [start, end) (0-based),
+ * with their type: what the editor uses to expand a selection to whole blocks.
+ */
+let blocksCache = { src: null, blocks: [] };
+export function topLevelBlocks(src) {
+  if (blocksCache.src === src) return blocksCache.blocks;
+  const blocks = [];
+  for (const t of md.parse(src, {})) {
+    if (t.level !== 0 || !t.map || t.nesting === -1) continue;
+    blocks.push({ start: t.map[0], end: t.map[1], type: t.type.replace(/_open$/, '') });
+  }
+  blocksCache = { src, blocks };
+  return blocks;
+}

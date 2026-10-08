@@ -82,8 +82,17 @@ Relative image paths resolve against the folder of the open `.md` file.
 
 **Insert menu.** The toolbar's **Insert ▾** button and the editor's right-click
 menu paste in ready-made snippets: image (picks a file), image with caption,
-two/three columns, centered table, centered block, math, code, page break,
-document settings. The inserted placeholder is selected, ready to type over.
+columns, centered table, centered block, math, code, page break, document
+settings. The inserted placeholder is selected, ready to type over.
+
+With text selected, **Columns, Centered block, Math and Code wrap the selection**
+instead (Table centers a selected table). The selection is first widened to
+whole Markdown blocks, so half a formula, table or list is never cut in two;
+a selection inside one line wraps inline (`$…$`, `` `…` ``).
+
+**Rows and columns.** With the cursor in a Markdown table or a `columns` block,
+small buttons appear above the line to add a row/column before or after the one
+you're in, or delete it. Tables are re-aligned so the pipes line up.
 The snippets use a few readable attributes you can edit:
 
 | Attribute | On | Does |

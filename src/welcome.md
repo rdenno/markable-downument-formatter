@@ -24,7 +24,7 @@ $$
 | Change font    | front matter or `<style>body { font-family: Arial; }</style>` |
 | Keep together  | `<div style="break-inside: avoid">…</div>` |
 | Center image   | `<img src="pic.png" data-align="center">` |
-| Two columns    | `<div class="columns"><div>…</div><div>…</div></div>` |
+| Columns        | Insert ▾ → Columns (or select text first to wrap it) |
 
 ```python
 def hello():

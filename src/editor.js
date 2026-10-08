@@ -37,6 +37,12 @@ export function createEditor(parent, { doc = '', onChange, onGeometry, onCursor 
         EditorView.lineWrapping,
         theme,
         themeSlot.of([]),
+        // Labels in the find/replace panel, capitalised like the rest of the app.
+        EditorState.phrases.of({
+          'Find': 'Find', 'Replace': 'Replace', 'next': 'Next', 'previous': 'Previous', 'all': 'All',
+          'match case': 'Match case', 'regexp': 'Regex', 'by word': 'Whole word',
+          'replace': 'Replace', 'replace all': 'Replace all', 'close': 'Close',
+        }),
         EditorView.updateListener.of((u) => {
           if (u.docChanged || u.selectionSet) onCursor?.(u.state.doc.lineAt(u.state.selection.main.head).number - 1);
           if (u.docChanged) onChange(u);

@@ -4,6 +4,7 @@ import { measurePreviewBlocks, buildAnchors, mapY, referenceY, scrollTopForRefer
 import { platform } from './platform.js';
 import { planIncremental } from './incremental.js';
 import { TEMPLATES } from './templates.js';
+import { expandToBlocks, blockAt, tableAt, editTable, cellOffset, columnsAt, editColumns } from './structure.js';
 import WELCOME from './welcome.md';
 
 const $ = (sel) => document.querySelector(sel);
@@ -30,7 +31,7 @@ const editor = createEditor(editorHost, {
   doc: '',
   onChange: () => { updateTitle(); scheduleRender(); },
   onGeometry: () => { if (!job || job.done) onScroll(activePane, true); },
-  onCursor: (line) => { cursorLine = line; scheduleHighlight(); },
+  onCursor: (line) => { cursorLine = line; scheduleHighlight(); scheduleTools?.(); },
 });
 const editorScroller = editor.scrollDOM;
 let cursorLine = 0;
@@ -574,6 +575,98 @@ async function cmdExport() {
   }
 }
 
+// ---------- table / columns tools (floating over the editor) ----------
+const toolsEl = $('#struct-tools');
+let toolsRaf = 0;
+function scheduleTools() { cancelAnimationFrame(toolsRaf); toolsRaf = requestAnimationFrame(updateTools); }
+
+function toolButton(label, title, fn, enabled = true) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.title = title;
+  b.disabled = !enabled;
+  b.onmousedown = (e) => e.preventDefault(); // keep the editor's focus and cursor
+  b.onclick = () => { fn(); editor.focus(); };
+  return b;
+}
+
+function replaceLines(from, to, text) {
+  // Replace whole lines [from, to) (0-based) with `text` (null deletes them).
+  const doc = editor.state.doc;
+  const start = doc.line(from + 1).from;
+  if (text === null) {
+    const end = to < doc.lines ? doc.line(to + 1).from : doc.length;
+    return { from: start, to: end, insert: '' };
+  }
+  const end = doc.line(to).to;
+  return { from: start, to: end, insert: text };
+}
+
+function updateTools() {
+  const st = editor.state;
+  const head = st.selection.main.head;
+  const line = st.doc.lineAt(head);
+  const text = st.doc.toString();
+  const t = tableAt(text, line.number - 1, head - line.from);
+  const c = t ? null : columnsAt(text, line.number - 1);
+  toolsEl.replaceChildren();
+  if (!t && !(c && c.children.length)) { toolsEl.hidden = true; return; }
+  const label = document.createElement('span');
+  label.textContent = t ? 'Table' : 'Columns';
+  toolsEl.append(label);
+  if (t) {
+    const run = (op) => {
+      const r = editTable(editor.state.doc.toString(), tableAt(editor.state.doc.toString(), line.number - 1, head - line.from), op);
+      if (!r) return;
+      const ch = replaceLines(r.from, r.from + (r.to - r.from), r.text);
+      const lines = r.text.split('\n');
+      const rowText = lines[r.cursor.line - r.from];
+      let pos = ch.from;
+      for (let i = 0; i < r.cursor.line - r.from; i++) pos += lines[i].length + 1;
+      editor.dispatch({ changes: ch, selection: { anchor: pos + cellOffset(rowText, r.cursor.cell) } });
+    };
+    toolsEl.append(
+      toolButton('+ Row above', 'Insert a row above this one', () => run('rowAbove'), t.row >= 1),
+      toolButton('+ Row below', 'Insert a row below this one', () => run('rowBelow')),
+      toolButton('+ Col left', 'Insert a column left of this one', () => run('colLeft')),
+      toolButton('+ Col right', 'Insert a column right of this one', () => run('colRight')),
+      toolButton('− Row', 'Delete this row', () => run('delRow'), t.row >= 1),
+      toolButton('− Col', 'Delete this column', () => run('delCol'), t.cols > 1),
+    );
+  } else {
+    const run = (op) => {
+      const cur = columnsAt(editor.state.doc.toString(), line.number - 1);
+      const r = cur && editColumns(editor.state.doc.toString(), cur, op);
+      if (!r) return;
+      const doc = editor.state.doc;
+      if (r.insertLines) {
+        const pos = doc.line(r.from + 1).from;
+        const insert = r.text + '\n';
+        const at = insert.indexOf(r.select);
+        editor.dispatch({ changes: { from: pos, insert }, selection: { anchor: pos + at, head: pos + at + r.select.length } });
+      } else {
+        const ch = replaceLines(r.from, r.to, null);
+        editor.dispatch({ changes: ch, selection: { anchor: Math.min(ch.from, doc.length - (ch.to - ch.from)) } });
+      }
+    };
+    toolsEl.append(
+      toolButton('+ Col left', 'Insert a column left of this one', () => run('colLeft')),
+      toolButton('+ Col right', 'Insert a column right of this one', () => run('colRight')),
+      toolButton('− Col', 'Delete this column', () => run('delCol'), c.children.length > 1),
+    );
+  }
+  // Float just above the cursor's line, at the right edge of the editor.
+  const coords = editor.coordsAtPos(line.from);
+  const host = editorHost.getBoundingClientRect();
+  if (!coords || coords.bottom < host.top || coords.top > host.bottom) { toolsEl.hidden = true; return; }
+  toolsEl.hidden = false;
+  const h = toolsEl.offsetHeight;
+  let top = coords.top - host.top - h - 4;
+  if (top < 4) top = coords.bottom - host.top + 4;
+  toolsEl.style.top = top + 'px';
+}
+editorScroller.addEventListener('scroll', scheduleTools, { passive: true });
+
 // ---------- insert menu & editor context menu ----------
 const menuEl = $('#menu');
 
@@ -612,10 +705,63 @@ window.addEventListener('pointerdown', (e) => { if (!menuEl.hidden && !menuEl.co
 window.addEventListener('blur', hideMenu);
 
 function templateItems() {
-  return TEMPLATES.map((t) => ({ label: t.label + (t.id === 'image' || t.id === 'figure' ? '…' : ''), action: () => insertTemplate(t) }));
+  const wrapping = !editor.state.selection.main.empty;
+  return TEMPLATES.map((t) => ({
+    label: t.label + (t.id === 'image' || t.id === 'figure' ? '…' : '') + (wrapping && t.wrap && wrapApplies(t) ? ' (wrap selection)' : ''),
+    action: () => insertTemplate(t),
+  }));
+}
+
+// Whether a template with a condition (e.g. "only tables") would wrap the current selection.
+function wrapApplies(t) {
+  if (!t.wrapIf) return true;
+  const st = editor.state, sel = st.selection.main, text = st.doc.toString();
+  const range = expandToBlocks(text, st.doc.lineAt(sel.from).number - 1, st.doc.lineAt(sel.to).number - 1);
+  const blk = blockAt(text, range.from);
+  return !!blk && blk.start === range.from && blk.end - 1 >= range.to && t.wrapIf(blk.type);
+}
+
+// With text selected, templates that can wrap do so. Selections inside one line
+// wrap inline where that exists (math -> $…$, code -> `…`); otherwise the selection
+// is expanded to whole Markdown blocks first, so a half-selected formula, table or
+// list is always wrapped whole rather than cut in two.
+function wrapSelection(t) {
+  const st = editor.state;
+  const sel = st.selection.main;
+  const doc = st.doc;
+  const a = doc.lineAt(sel.from), b = doc.lineAt(sel.to === sel.from ? sel.to : sel.to - (doc.lineAt(sel.to).from === sel.to ? 1 : 0));
+  const text = doc.toString();
+  const selected = st.sliceDoc(sel.from, sel.to);
+  const inlineOk = a.number === b.number && selected.trim() && selected.trim() !== a.text.trim() && !selected.includes('\n');
+  if (inlineOk && (t.id === 'math' || t.id === 'code')) {
+    const w = t.wrap(selected.trim(), true);
+    const lead = selected.length - selected.trimStart().length, trail = selected.length - selected.trimEnd().length;
+    const from = sel.from + lead, to = sel.to - trail;
+    editor.dispatch({ changes: { from, to, insert: w.text }, selection: { anchor: from, head: from + w.text.length }, scrollIntoView: true });
+    return true;
+  }
+  const range = expandToBlocks(text, a.number - 1, b.number - 1);
+  const blk = blockAt(text, range.from);
+  const sameBlock = blk && blk.start === range.from && blk.end - 1 >= range.to;
+  if (t.wrapIf && !(sameBlock && t.wrapIf(blk.type))) return false;
+  if (t.already && sameBlock && t.already(blk.type)) {
+    setStatus(`That's already a ${t.label.toLowerCase()} block`);
+    return true;
+  }
+  const from = doc.line(range.from + 1).from, to = doc.line(range.to + 1).to;
+  const content = st.sliceDoc(from, to);
+  const w = t.wrap(content, false);
+  const at = w.select ? w.text.lastIndexOf(w.select) : -1;
+  editor.dispatch({
+    changes: { from, to, insert: w.text },
+    selection: at >= 0 ? { anchor: from + at, head: from + at + w.select.length } : { anchor: from, head: from + w.text.length },
+    scrollIntoView: true,
+  });
+  return true;
 }
 
 async function insertTemplate(t) {
+  if (t.wrap && !editor.state.selection.main.empty && wrapSelection(t)) { editor.focus(); return; }
   let text = t.text;
   let select = t.select;
   if ((t.id === 'image' || t.id === 'figure') && platform.pickImage) {
@@ -636,7 +782,7 @@ async function insertTemplate(t) {
     insert = text + '\n\n';
   } else {
     // Always on its own lines, with a blank line before and after.
-    const line = st.doc.lineAt(st.selection.main.head);
+    const line = st.doc.lineAt(st.selection.main.to);
     const blank = (n) => n < 1 || n > st.doc.lines || st.doc.line(n).text.trim() === '';
     if (line.text.trim() === '') {
       from = line.from; to = line.to;

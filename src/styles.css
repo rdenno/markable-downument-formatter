@@ -107,3 +107,46 @@ select:disabled { opacity: .5; cursor: default; }
 #menu button:hover, #menu button:focus { background: var(--hover); outline: none; }
 #menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 0; }
 #menu .menu-title { padding: 4px 14px 2px; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+
+.editor-wrap { position: relative; }
+#editor { position: absolute; inset: 0; }
+
+/* Floating table/columns tools above the cursor line */
+#struct-tools {
+  position: absolute; right: 22px; z-index: 5;
+  display: flex; align-items: center; gap: 3px; padding: 3px 4px 3px 8px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 7px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.12); font-size: 11.5px;
+  opacity: .9;
+}
+#struct-tools:hover { opacity: 1; }
+#struct-tools span { color: var(--muted); margin-right: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; font-size: 10.5px; }
+#struct-tools button { padding: 1px 7px; font-size: 11.5px; line-height: 18px; }
+#struct-tools button:disabled { opacity: .4; cursor: default; }
+
+/* Find & replace panel, in the app's style */
+#editor .cm-panels { background: var(--panel); color: var(--text); border-color: var(--border); }
+#editor .cm-panels-top { border-bottom: 1px solid var(--border); }
+#editor .cm-panels-bottom { border-top: 1px solid var(--border); }
+#editor .cm-search { padding: 6px 34px 6px 10px; font: 12px/1.4 -apple-system, "Segoe UI", system-ui, Helvetica, Arial, sans-serif; position: relative; }
+#editor .cm-search br { display: block; content: ""; margin-top: 5px; }
+#editor .cm-search .cm-textfield {
+  font: inherit; color: var(--text); background: var(--bg);
+  border: 1px solid var(--border); border-radius: 5px; padding: 3px 8px; margin: 0 4px 0 0; width: 220px; outline: none;
+}
+#editor .cm-search .cm-textfield:focus { border-color: var(--accent); }
+#editor .cm-search .cm-button {
+  font: inherit; color: var(--text); background: var(--panel); background-image: none;
+  border: 1px solid var(--border); border-radius: 5px; padding: 3px 9px; margin: 0 4px 0 0; text-transform: none; cursor: pointer;
+}
+#editor .cm-search .cm-button:hover { background: var(--hover); }
+#editor .cm-search .cm-button:active { background: var(--active-bg); }
+#editor .cm-search label { color: var(--muted); margin: 0 8px 0 2px; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
+#editor .cm-search input[type=checkbox] { margin: 0; accent-color: var(--accent); }
+#editor .cm-search button[name=close] {
+  position: absolute; top: 6px; right: 8px; width: 22px; height: 22px; padding: 0; line-height: 20px;
+  font-size: 16px; color: var(--muted); background: none; border: 1px solid transparent; border-radius: 5px; cursor: pointer;
+}
+#editor .cm-search button[name=close]:hover { background: var(--hover); color: var(--text); }
+#editor .cm-searchMatch { background-color: rgba(250, 204, 21, .35); outline: none; }
+#editor .cm-searchMatch-selected { background-color: rgba(37, 99, 235, .3); }

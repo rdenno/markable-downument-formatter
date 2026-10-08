@@ -4,6 +4,9 @@
 //   data-width="2" or "40%"          column width: a share of the row, or a fixed size
 //   data-valign="top|center|bottom"  vertical alignment of the columns
 // `select` is the placeholder that gets selected after inserting, ready to type over.
+// `wrap(content, inline)` (optional): with text selected, the template wraps it
+// instead of being inserted after it. The selection is first expanded to whole
+// blocks, so half a math block or table is never wrapped.
 
 export const TEMPLATES = [
   {
@@ -20,10 +23,10 @@ export const TEMPLATES = [
     ].join('\n'),
   },
   {
-    id: 'columns2', label: 'Two columns', select: 'Left column',
+    id: 'columns', label: 'Columns', select: 'Left column',
     text: [
       '<div class="columns" data-valign="top">',
-      '<div data-width="1" data-align="center">',
+      '<div data-width="1" data-align="left">',
       '',
       'Left column',
       '',
@@ -35,31 +38,22 @@ export const TEMPLATES = [
       '</div>',
       '</div>',
     ].join('\n'),
-  },
-  {
-    id: 'columns3', label: 'Three columns', select: 'First column',
-    text: [
-      '<div class="columns" data-valign="top">',
-      '<div data-width="1" data-align="left">',
-      '',
-      'First column',
-      '',
-      '</div>',
-      '<div data-width="1" data-align="left">',
-      '',
-      'Second column',
-      '',
-      '</div>',
-      '<div data-width="1" data-align="left">',
-      '',
-      'Third column',
-      '',
-      '</div>',
-      '</div>',
-    ].join('\n'),
+    // Selected blocks become the first column.
+    wrap: (c) => ({
+      text: [
+        '<div class="columns" data-valign="top">',
+        '<div data-width="1" data-align="left">', '', c, '', '</div>',
+        '<div data-width="1" data-align="left">', '', 'Right column', '', '</div>',
+        '</div>',
+      ].join('\n'),
+      select: 'Right column',
+    }),
   },
   {
     id: 'table', label: 'Table (centered)', select: 'Header 1',
+    // A selected table gets centered; anything else is left alone.
+    wrapIf: (type) => type === 'table',
+    wrap: (c) => ({ text: ['<div data-align="center">', '', c, '', '</div>'].join('\n') }),
     text: [
       '<div data-align="center">',
       '',
@@ -74,9 +68,22 @@ export const TEMPLATES = [
   {
     id: 'center', label: 'Centered block', select: 'Centered content',
     text: ['<div data-align="center">', '', 'Centered content', '', '</div>'].join('\n'),
+    wrap: (c) => ({ text: ['<div data-align="center">', '', c, '', '</div>'].join('\n') }),
   },
-  { id: 'math', label: 'Math block', select: 'x^2', text: '$$\nx^2\n$$' },
-  { id: 'code', label: 'Code block', select: 'code', text: '```python\ncode\n```' },
+  {
+    id: 'math', label: 'Math', select: 'x^2', text: '$$\nx^2\n$$',
+    wrap: (c, inline) => ({ text: inline ? '$' + c + '$' : '$$\n' + c + '\n$$' }),
+    already: (type) => type === 'math_block',
+  },
+  {
+    id: 'code', label: 'Code', select: 'code', text: '```python\ncode\n```',
+    wrap: (c, inline) => {
+      if (inline) { const tick = c.includes('`') ? '``' : '`'; return { text: tick + (tick.length > 1 ? ' ' + c + ' ' : c) + tick }; }
+      const fence = /^```/m.test(c) ? '~~~' : '```';
+      return { text: fence + 'text\n' + c + '\n' + fence, select: 'text' };
+    },
+    already: (type) => type === 'fence' || type === 'code_block',
+  },
   { id: 'pagebreak', label: 'Page break', select: null, text: '\\newpage' },
   {
     id: 'settings', label: 'Document settings', select: 'Title', atTop: true,
