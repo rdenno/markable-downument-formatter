@@ -3,11 +3,25 @@
 A small, predictable Markdown → PDF editor. Raw Markdown on the left, the real
 PDF pages on the right, with live preview and scroll sync between the two panes.
 
-## Run it
+## Install
+
+Installers are built by GitHub Actions:
+
+- **Releases:** push a tag like `v0.1.0` and the
+  [Releases page](https://github.com/rdenno/markable-downument-formatter/releases) gets a
+  Windows installer, a portable Windows `.exe`, a Linux `.AppImage` and a `.deb`.
+- **Any build:** open a run under the **Actions** tab ("Build installers") and download
+  the `Markable-Windows` / `Markable-Linux` artifact.
+
+The builds aren't code-signed, so Windows SmartScreen will warn the first time
+you run the installer ("More info" → "Run anyway").
+
+## Run from source
 
 ```sh
 npm install
-npm start          # builds and opens the desktop app (Electron)
+npm start            # build and open the app
+npm run dist:win     # build installers into out/ (or dist:linux)
 ```
 
 `npm run serve` runs it in a normal browser at http://localhost:8123 instead.
@@ -19,23 +33,48 @@ In that mode, Export goes through the browser's print dialog ("Save as PDF").
   plus GFM tables, strikethrough and auto-links. Nothing app-specific.
 - **Formatting = HTML + CSS.** Raw HTML passes straight through and CSS behaves
   the way it does in a browser. No special command language to learn.
-- **Math**: `$inline$` and `$$display$$` (or a ```` ```math ```` block) via KaTeX.
-  A bad formula renders as a red inline error. It never breaks the rest of the document.
+- **Math** (KaTeX): `$inline$`, `\(inline\)`, `$$display$$`, `\[display\]`, or a
+  ```` ```math ```` block. A bad formula shows a red inline error. It never breaks the rest of the document.
+- **Code**: fenced blocks are syntax-highlighted when you name the language
+  (```` ```python ````). Unlabelled blocks stay plain. Nothing is guessed.
 - **Pages**: [Paged.js](https://pagedjs.org) splits the HTML into real pages using
   CSS paged media. The PDF export prints that same paginated document in Chromium,
   so **the preview is the PDF**.
+
+### Document settings (front matter)
+
+An optional YAML block at the very top of the file:
+
+```yaml
+---
+title: Quarterly report      # PDF title
+page-size: letter            # A4, A5, letter, legal, ... or "210mm 297mm"
+orientation: landscape       # portrait / landscape
+margin: 1in                  # one value, or "top right bottom left"
+font: Arial                  # any installed font; a list works too: "Inter, Arial"
+font-size: 12                # number = pt, or "12pt", "16px"
+line-height: 1.4
+text-align: justify
+page-numbers: bottom-right   # true, false, bottom-center (default), bottom-left, top-right, ...
+lang: en
+---
+```
+
+Pandoc's names work too (`papersize`, `fontsize`, `mainfont`, `linestretch`,
+`geometry: margin=1in`). Mistakes don't stop the document rendering: a warning
+appears in the preview's status bar instead. When the document sets a page
+size, the toolbar's page-size picker is disabled.
 
 ### Cheat sheet
 
 | Want                     | Write                                                     |
 |--------------------------|-----------------------------------------------------------|
 | Page break               | `\newpage` or `\pagebreak` on its own line                |
-| Page size / margins      | `<style>@page { size: letter; margin: 1in; }</style>`     |
-| Landscape                | `<style>@page { size: A4 landscape; }</style>`            |
-| Font                     | `<style>body { font-family: Arial; font-size: 12pt; }</style>` |
-| No page numbers          | `<style>@page { @bottom-center { content: none; } }</style>` |
+| Page size / margins      | front matter, or `<style>@page { size: letter; margin: 1in; }</style>` |
+| Font                     | front matter, or `<style>body { font-family: Arial; }</style>` |
 | Keep a block on one page | `<div style="break-inside: avoid"> … </div>`              |
 | Image size               | `<img src="pic.png" width="300">`                         |
+| Anything else            | CSS in a `<style>` block, anywhere in the document        |
 
 Relative image paths resolve against the folder of the open `.md` file.
 
@@ -51,11 +90,22 @@ Relative image paths resolve against the folder of the open `.md` file.
   so tall images, tables and page gaps stay aligned.
 - Ctrl/Cmd + N / O / S / Shift+S / E: new, open, save, save as, export PDF.
 
+### Speed on long documents
+
+The preview shows the pages you're looking at as soon as they're laid out,
+and later pages fill in below. Pages before the line you edited are reused
+from the previous render rather than laid out again. This only affects the
+on-screen preview: **Export PDF always lays out the whole document from scratch.**
+
 ## Layout
 
 ```
-electron/   main process (windows, file dialogs, PDF export) + preload bridge
-src/        renderer: editor, markdown pipeline, preview, scroll sync
-index.html  app shell
-build.mjs   esbuild bundle -> dist/app.js
+electron/          main process (windows, file dialogs, PDF export) + preload bridge
+src/app.js         renderer: panes, zoom, render loop
+src/markdown.js    markdown → HTML (markdown-it, KaTeX, highlight.js, source lines)
+src/frontmatter.js YAML front matter → CSS
+src/document.js    the paginated HTML document (shared by preview and export)
+src/sync.js        scroll sync
+src/incremental.js page reuse for fast previews
+build.mjs          esbuild bundle + runtime assets → dist/
 ```

@@ -6,7 +6,7 @@ exactly what gets exported — same pages, same breaks.
 ## What works
 
 - Standard Markdown (CommonMark) plus tables, ~~strikethrough~~ and auto-links
-- Math with KaTeX: inline $e^{i\pi} + 1 = 0$ and display:
+- Math with KaTeX: inline $e^{i\pi} + 1 = 0$ or \(a^2 + b^2 = c^2\), and display:
 
 $$
 \int_0^\infty e^{-x^2}\,dx = \frac{\sqrt{\pi}}{2}
@@ -20,13 +20,26 @@ $$
 | Feature        | How                                   |
 |----------------|---------------------------------------|
 | Page break     | `\newpage` or `\pagebreak` on its own line |
-| Page setup     | `<style>@page { size: letter; margin: 1in; }</style>` |
-| Change font    | `<style>body { font-family: Arial; }</style>` |
+| Page setup     | front matter (see below) or `<style>@page { margin: 1in; }</style>` |
+| Change font    | front matter or `<style>body { font-family: Arial; }</style>` |
 | Keep together  | `<div style="break-inside: avoid">…</div>` |
 
 ```python
 def hello():
-    print("code blocks wrap instead of running off the page")
+    # highlighted because the block says "python"
+    print("long lines wrap instead of running off the page")
+```
+
+Document settings go in a block at the very top of the file:
+
+```yaml
+---
+page-size: letter
+margin: 1in
+font: Arial
+font-size: 12
+page-numbers: bottom-right
+---
 ```
 
 > Scroll either side — the other follows. Ctrl/Cmd + scroll (or the

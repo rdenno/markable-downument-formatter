@@ -12,6 +12,7 @@ function createWindow() {
     width: 1400,
     height: 900,
     title: 'Markable',
+    icon: path.join(__dirname, '..', 'build', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

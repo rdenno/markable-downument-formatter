@@ -59,7 +59,7 @@ export function buildDocument(markdown, { assetBase, baseHref, pageSize = 'A4', 
 <meta charset="utf-8">
 <base href="${escapeAttr(baseHref)}">
 <title>${escapeAttr(docTitle)}</title>
-<link rel="stylesheet" href="${asset('node_modules/katex/dist/katex.min.css')}" data-pagedjs-ignore>
+<link rel="stylesheet" href="${asset('dist/vendor/katex/katex.min.css')}" data-pagedjs-ignore>
 <style media="screen">${SCREEN_CSS} :root { --pages-left: ${Math.round(pagesLeft)}px; }</style>
 ${docSetsSize ? '' : `<style>@page { size: ${size}; }</style>`}
 <style>${highlightCss}</style>
@@ -102,7 +102,7 @@ ${userStyles.join('\n')}
     }
   };
 </script>
-<script src="${asset('node_modules/pagedjs/dist/paged.polyfill.min.js')}"></script>
+<script src="${asset('dist/vendor/paged.polyfill.min.js')}"></script>
 <script>
   // Progress: lets the app show the first pages before the whole document is done.
   (function () {
