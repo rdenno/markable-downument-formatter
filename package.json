@@ -1,0 +1,93 @@
+{
+  "name": "markable-downument-formatter",
+  "version": "0.1.0",
+  "description": "Markdown to PDF editor with live paged preview and scroll sync",
+  "main": "electron/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "start": "node build.mjs && electron .",
+    "serve": "node build.mjs && python3 -m http.server 8123",
+    "dist": "node build.mjs && electron-builder",
+    "dist:win": "node build.mjs && electron-builder --win",
+    "dist:linux": "node build.mjs && electron-builder --linux"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rdenno/markable-downument-formatter.git"
+  },
+  "keywords": [],
+  "author": "rdenno",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/rdenno/markable-downument-formatter/issues"
+  },
+  "homepage": "https://github.com/rdenno/markable-downument-formatter#readme",
+  "devDependencies": {
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/lang-yaml": "^6.1.3",
+    "@codemirror/language-data": "^6.5.2",
+    "@codemirror/theme-one-dark": "^6.1.3",
+    "@vscode/markdown-it-katex": "^1.1.2",
+    "codemirror": "^6.0.2",
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.28.2",
+    "highlight.js": "^11.12.0",
+    "js-yaml": "^4.3.2",
+    "katex": "^0.16.47",
+    "markdown-it": "^15.0.2",
+    "pagedjs": "^0.4.3"
+  },
+  "productName": "Markable",
+  "build": {
+    "appId": "io.github.rdenno.markable",
+    "productName": "Markable",
+    "directories": {
+      "output": "out",
+      "buildResources": "build"
+    },
+    "files": [
+      "index.html",
+      "src/styles.css",
+      "dist/**/*",
+      "!dist/**/*.map",
+      "electron/**/*",
+      "build/icon.png"
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown"
+        ],
+        "name": "Markdown document",
+        "role": "Editor"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "maintainer": "rdenno",
+      "icon": "build/icon.png"
+    }
+  }
+}

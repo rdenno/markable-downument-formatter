@@ -1,0 +1,113 @@
+/* Default document theme. Override anything from your markdown with a style block,
+   e.g.  @page { margin: 1in; }  body { font-family: Arial; } */
+
+@page {
+  margin: 22mm 20mm;
+  @bottom-center {
+    content: counter(page);
+    font: 9pt/1 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #888;
+  }
+}
+
+body {
+  font-family: "Charter", "Bitstream Charter", "Sitka Text", Cambria, Georgia, serif;
+  font-size: 11pt;
+  line-height: 1.5;
+  color: #1a1a1a;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.25;
+  margin: 1.4em 0 0.5em;
+  break-after: avoid;
+}
+h1 { font-size: 22pt; }
+h2 { font-size: 16pt; }
+h3 { font-size: 13pt; }
+h4, h5, h6 { font-size: 11pt; }
+body > :first-child, .pagedjs_page_content > div > :first-child { margin-top: 0; }
+
+p { margin: 0 0 0.8em; }
+a { color: #1a5fb4; }
+
+img, svg, video { max-width: 100%; }
+img { break-inside: avoid; }
+
+blockquote {
+  margin: 0 0 0.8em;
+  padding: 0 1em;
+  border-left: 3px solid #ccc;
+  color: #555;
+}
+
+code {
+  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.88em;
+  background: #f3f3f3;
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+pre {
+  background: #f6f6f6;
+  border: 1px solid #e3e3e3;
+  border-radius: 4px;
+  padding: 0.7em 0.9em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0 0 0.8em;
+}
+pre code { background: none; padding: 0; font-size: 0.85em; }
+
+table { border-collapse: collapse; margin: 0 0 0.8em; }
+th, td { border: 1px solid #ccc; padding: 0.3em 0.6em; text-align: left; }
+th { background: #f3f3f3; }
+tr { break-inside: avoid; }
+
+hr { border: none; border-top: 1px solid #ccc; margin: 1.2em 0; }
+
+ul, ol { margin: 0 0 0.8em; padding-left: 1.6em; }
+li > p { margin: 0 0 0.3em; }
+
+.katex-display, .katex-block { margin: 0.6em 0; }
+.katex-error { color: #c01c28; }
+
+/* \newpage, \pagebreak, or any element with this class */
+.page-break { break-after: page; height: 0; margin: 0; }
+
+/* <img data-align="center|left|right">: a convention from other Markdown editors. */
+img[data-align="center"] { display: block; margin-left: auto; margin-right: auto; }
+img[data-align="left"] { display: block; margin-right: auto; }
+img[data-align="right"] { display: block; margin-left: auto; }
+
+/* Side-by-side columns without table borders:
+   <div class="columns"> <div>…</div> <div>…</div> </div>
+   Each child is one column, sharing the width equally (override with style="flex: 2"). */
+.columns { display: flex; gap: 1.5em; align-items: flex-start; break-inside: avoid; margin: 0 0 0.8em; }
+.columns > * { flex: 1 1 0; min-width: 0; }
+.columns > :first-child { margin-top: 0; }
+.columns img { max-width: 100%; }
+
+/* data-align on any block: aligns text, tables, images and code inside it. */
+[data-align="center"] { text-align: center; }
+[data-align="right"] { text-align: right; }
+[data-align="left"] { text-align: left; }
+[data-align="center"] > table, [data-align="center"] > figure, [data-align="center"] > pre,
+[data-align="center"] > img { margin-left: auto; margin-right: auto; }
+[data-align="right"] > table, [data-align="right"] > figure, [data-align="right"] > pre,
+[data-align="right"] > img { margin-left: auto; margin-right: 0; }
+[data-align] > pre { text-align: left; }
+div[data-align] > :last-child { margin-bottom: 0; }
+div[data-align] { margin-bottom: 0.8em; }
+
+/* Vertical alignment of columns: <div class="columns" data-valign="center"> */
+.columns[data-valign="center"], .columns[data-valign="middle"] { align-items: center; }
+.columns[data-valign="bottom"] { align-items: flex-end; }
+.columns > * > :last-child { margin-bottom: 0; }
+
+figure { margin: 0 0 0.8em; break-inside: avoid; }
+figure img { max-width: 100%; }
+figcaption { font-size: 0.9em; color: #555; margin-top: 0.3em; }
