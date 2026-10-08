@@ -1,0 +1,52 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' file: data: blob: 'unsafe-inline'; img-src * file: data: blob:; frame-src 'self' about: file:">
+<title>Markable</title>
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+  <header id="toolbar">
+    <button id="btn-new" title="New (Ctrl+N)">New</button>
+    <button id="btn-open" title="Open (Ctrl+O)">Open</button>
+    <button id="btn-save" title="Save (Ctrl+S, Shift for Save As)">Save</button>
+    <span id="file-name"></span>
+    <span class="spacer"></span>
+    <label>Page <select id="page-size"></select></label>
+    <label title="Keep both panes scrolled to the same place"><input type="checkbox" id="sync"> Scroll sync</label>
+    <button id="btn-export" class="primary" title="Export PDF (Ctrl+E)">Export PDF</button>
+  </header>
+  <main id="main">
+    <section id="editor-pane" class="pane">
+      <div class="pane-head">
+        <span>Markdown</span>
+        <span class="zoom">
+          <button id="editor-zoom-out" title="Smaller text">−</button>
+          <span id="editor-zoom-label"></span>
+          <button id="editor-zoom-in" title="Larger text">+</button>
+        </span>
+      </div>
+      <div id="editor" class="pane-body"></div>
+    </section>
+    <div id="divider" title="Drag to resize"></div>
+    <section id="preview-pane" class="pane">
+      <div class="pane-head">
+        <span>Preview</span>
+        <span id="status"></span>
+        <span class="zoom">
+          <button id="preview-zoom-out" title="Zoom out">−</button>
+          <span id="preview-zoom-label"></span>
+          <button id="preview-zoom-in" title="Zoom in">+</button>
+          <button id="preview-fit" title="Fit page width to the panel">Fit</button>
+        </span>
+      </div>
+      <div class="pane-body frames">
+        <iframe id="frame-a" title="Preview"></iframe>
+        <iframe id="frame-b" title="Preview"></iframe>
+      </div>
+    </section>
+  </main>
+  <script src="dist/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "name": "markable-downument-formatter",
+  "version": "1.0.0",
+  "description": "Markdown to PDF editor with live paged preview and scroll sync",
+  "main": "electron/main.js",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "start": "node build.mjs && electron .",
+    "serve": "node build.mjs && python3 -m http.server 8123"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rdenno/markable-downument-formatter.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/rdenno/markable-downument-formatter/issues"
+  },
+  "homepage": "https://github.com/rdenno/markable-downument-formatter#readme",
+  "dependencies": {
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/language-data": "^6.5.2",
+    "@vscode/markdown-it-katex": "^1.1.2",
+    "codemirror": "^6.0.2",
+    "katex": "^0.16.47",
+    "markdown-it": "^15.0.2",
+    "pagedjs": "^0.4.3"
+  },
+  "devDependencies": {
+    "electron": "^44.7.0",
+    "esbuild": "^0.28.2"
+  }
+}
