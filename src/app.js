@@ -10,7 +10,7 @@ const APP_ROOT = new URL('./', location.href).href;
 
 // ---------- persisted settings ----------
 const settings = Object.assign(
-  { pageSize: 'A4', editorFontSize: 14, previewZoom: 1, previewFit: true, split: 0.5, sync: true },
+  { pageSize: 'A4', editorFontSize: 14, previewZoom: 1, previewFit: true, split: 0.5, sync: true, highlight: true },
   safeJson(localStorageGet('mdpdf.settings')),
 );
 function saveSettings() { localStorageSet('mdpdf.settings', JSON.stringify(settings)); }
@@ -29,8 +29,10 @@ const editor = createEditor(editorHost, {
   doc: '',
   onChange: () => { updateTitle(); scheduleRender(); },
   onGeometry: () => { if (!job || job.done) onScroll(activePane, true); },
+  onCursor: (line) => { cursorLine = line; scheduleHighlight(); },
 });
 const editorScroller = editor.scrollDOM;
+let cursorLine = 0;
 
 function currentText() { return editor.state.doc.toString(); }
 function isDirty() { return currentText() !== savedText; }
@@ -133,7 +135,11 @@ window.__mdpdfPrefixPages = (doc) => {
   if (!j || !j.prefixFrom || doc !== j.frame.contentDocument) return null;
   const pages = [...j.prefixFrom.contentDocument.querySelectorAll('.pagedjs_page')].slice(0, j.skip);
   if (pages.length !== j.skip) return null;
-  return pages.map((p) => doc.importNode(p, true));
+  return pages.map((p) => {
+    const copy = doc.importNode(p, true);
+    for (const el of copy.querySelectorAll('.mdpdf-cursor-block')) el.classList.remove('mdpdf-cursor-block');
+    return copy;
+  });
 };
 
 // If layout stops making progress, stop waiting and say so.
@@ -184,6 +190,7 @@ function swapIn(j) {
   oldFront.style.zIndex = '0';
   front = frames.indexOf(back);
   j.swapped = true;
+  applyHighlight(back);
 }
 
 function completeJob(j) {
@@ -203,6 +210,7 @@ function completeJob(j) {
   recenterPages();
   remeasurePreview(j.frame);
   if (activePane === 'editor') syncFrom('editor', j.frame);
+  applyHighlight(j.frame);
   const pages = j.frame.contentDocument?.querySelectorAll('.pagedjs_page').length || 0;
   if (j.error) {
     // Keep whatever was laid out, and say exactly what happened.
@@ -241,6 +249,36 @@ function remeasurePreview(frame = frames[front], minHeight = 0) {
   const m = measurePreviewBlocks(d);
   const page = d.querySelector('.pagedjs_page');
   preview = { ...m, scrollHeight: Math.max(m.scrollHeight, minHeight), pageWidth: page ? page.offsetWidth : 0 };
+}
+
+// ---------- cursor highlight ----------
+// Marks the innermost preview block whose source lines contain the editor
+// cursor (every piece of it, if it is split across pages). Screen-only CSS:
+// it is never part of an export.
+let highlightRaf = 0;
+function scheduleHighlight() {
+  cancelAnimationFrame(highlightRaf);
+  highlightRaf = requestAnimationFrame(() => applyHighlight());
+}
+
+function applyHighlight(frame = frames[front]) {
+  const d = frame.contentDocument;
+  if (!d || !d.body) return;
+  for (const el of d.querySelectorAll('.mdpdf-cursor-block')) el.classList.remove('mdpdf-cursor-block');
+  if (!settings.highlight) return;
+  let best = null;
+  for (const el of d.querySelectorAll('[data-line]')) {
+    const start = +el.getAttribute('data-line');
+    const end = +el.getAttribute('data-line-end') || start + 1;
+    if (cursorLine < start || cursorLine >= end) continue;
+    if (!best || end - start < best.end - best.start || (end - start === best.end - best.start && start >= best.start)) {
+      best = { start, end };
+    }
+  }
+  if (!best) return;
+  for (const el of d.querySelectorAll(`[data-line="${best.start}"][data-line-end="${best.end}"]`)) {
+    el.classList.add('mdpdf-cursor-block');
+  }
 }
 
 // ---------- zoom ----------
@@ -416,6 +454,10 @@ const pageSel = $('#page-size');
 for (const name of PAGE_SIZE_NAMES) pageSel.add(new Option(name, name));
 pageSel.value = settings.pageSize;
 pageSel.addEventListener('change', () => { settings.pageSize = pageSel.value; saveSettings(); renderNow(); });
+
+const highlightBox = $('#highlight');
+highlightBox.checked = settings.highlight;
+highlightBox.addEventListener('change', () => { settings.highlight = highlightBox.checked; saveSettings(); applyHighlight(); });
 
 const syncBox = $('#sync');
 syncBox.checked = settings.sync;

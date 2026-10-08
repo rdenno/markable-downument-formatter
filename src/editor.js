@@ -18,7 +18,7 @@ const theme = EditorView.theme({
   '&.cm-focused': { outline: 'none' },
 });
 
-export function createEditor(parent, { doc = '', onChange, onGeometry }) {
+export function createEditor(parent, { doc = '', onChange, onGeometry, onCursor }) {
   const view = new EditorView({
     parent,
     state: EditorState.create({
@@ -30,6 +30,7 @@ export function createEditor(parent, { doc = '', onChange, onGeometry }) {
         EditorView.lineWrapping,
         theme,
         EditorView.updateListener.of((u) => {
+          if (u.docChanged || u.selectionSet) onCursor?.(u.state.doc.lineAt(u.state.selection.main.head).number - 1);
           if (u.docChanged) onChange(u);
           // CodeMirror estimates heights of lines it hasn't drawn yet and corrects
           // them as they scroll into view; re-sync when that happens.

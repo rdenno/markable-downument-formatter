@@ -21,6 +21,9 @@ body { margin: 0; }
    positions while laying out, so they must not move if the frame is resized mid-render.
    The app re-centres them via --pages-left once a render is finished. */
 .pagedjs_pages { display: flex; flex-direction: column; padding: 24px 24px 24px var(--pages-left, 24px); gap: 24px; width: max-content; }
+/* Block under the editor cursor (preview only; this stylesheet is never printed). */
+.mdpdf-cursor-block { background-color: rgba(37, 99, 235, .07); box-shadow: 0 0 0 3px rgba(37, 99, 235, .07); border-radius: 2px; }
+.mdpdf-cursor-block > td, .mdpdf-cursor-block > th { background-color: rgba(37, 99, 235, .09); }
 .pagedjs_page { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25), 0 4px 16px rgba(0,0,0,.08); flex: none; }
 `;
 
